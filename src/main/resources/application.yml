@@ -16,6 +16,7 @@ ai-search:
   embedding-model-url: ${AI_SEARCH_EMBED_MODEL:djl://ai.djl.huggingface.pytorch/sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2}
   min-score-threshold: ${AI_SEARCH_MIN_SCORE:0.71}
   category-boost-cache-ttl-seconds: ${AI_SEARCH_CATEGORY_BOOST_CACHE_TTL_SECONDS:300}
+  index-retention-count: ${AI_SEARCH_INDEX_RETENTION_COUNT:3}
   k8s:
     auto-port-forward: ${AI_SEARCH_AUTO_PORT_FORWARD:true}
     namespace: ${AI_SEARCH_K8S_NAMESPACE:ai-search}

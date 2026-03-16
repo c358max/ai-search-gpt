@@ -45,6 +45,10 @@ public record AiSearchProperties(
     /**
      * 카테고리 부스팅 룰 캐시 TTL(초)
      */
-    long categoryBoostCacheTtlSeconds
+    long categoryBoostCacheTtlSeconds,
+    /**
+     * 보관할 버전 인덱스 개수(현재 alias 대상 포함)
+     */
+    int indexRetentionCount
 ) {
 }

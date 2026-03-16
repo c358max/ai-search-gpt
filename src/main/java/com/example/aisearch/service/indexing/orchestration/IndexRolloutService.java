@@ -14,7 +14,7 @@ import org.springframework.stereotype.Service;
  * 2) 신규 버전 인덱스 생성(매핑/세팅 반영)
  * 3) 소스 데이터를 신규 인덱스로 색인
  * 4) read alias를 기존 -> 신규 인덱스로 전환
- * 5) 기존 인덱스 정리(삭제)
+ * 5) 보관 정책에 따라 과거 버전 인덱스 정리
  *
  * 목적:
  * - 무중단에 가까운 인덱스 교체
@@ -53,7 +53,7 @@ public class IndexRolloutService {
         long indexedCount = productIndexingService.reindexData(newIndex);
 
         aliasSwitcher.swapReadAlias(oldIndex, newIndex);
-        indexCleanupService.deleteIndexIfExists(oldIndex);
+        indexCleanupService.cleanupOldVersionedIndices(newIndex);
 
         return new IndexRolloutResult(oldIndex, newIndex, indexedCount);
     }

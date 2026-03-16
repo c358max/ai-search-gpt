@@ -1,0 +1,82 @@
+[
+  {
+    "id": "1",
+    "productName": "올가 나토키나제가 살아있는 우리콩 생나또(99g) (49.5gx2개입)",
+    "category": "간편식",
+    "description": "올가 생나또입니다. 우리콩으로 만든 발효식품으로 고소한 맛과 식감이 특징입니다.",
+    "price": 28300,
+    "categoryId": 2
+  },
+  {
+    "id": "2",
+    "productName": "올가 유기농 떡국떡 (500g)",
+    "category": "쌀∙견과",
+    "description": "올가 유기농 떡국떡입니다. 쫄깃한 식감과 담백한 맛이 특징입니다.",
+    "price": 10100,
+    "categoryId": 8
+  },
+  {
+    "id": "3",
+    "productName": "올가 Cage Free 동물복지 유정란 (20입)",
+    "category": "정육∙달걀",
+    "description": "올가 동물복지 유정란입니다. 신선한 계란으로 다양한 요리에 활용됩니다.",
+    "price": 20000,
+    "categoryId": 11
+  },
+  {
+    "id": "4",
+    "productName": "올가 통밀 베이글 (100gx4입)",
+    "category": "간편식",
+    "description": "올가 통밀 베이글입니다. 고소한 통밀 풍미로 간편한 식사에 적합합니다.",
+    "price": 8100,
+    "categoryId": 2
+  },
+  {
+    "id": "5",
+    "productName": "올가 한입에 쏙 우리밀 꼬마약과 (200g)",
+    "category": "간식∙음료",
+    "description": "올가 우리밀 꼬마약과입니다. 한입 크기의 달콤한 전통 간식입니다.",
+    "price": 19500,
+    "categoryId": 1
+  },
+  {
+    "id": "6",
+    "productName": "올가 제대로 차리는 한끼 메추리알 장조림 (200g)",
+    "category": "국∙반찬",
+    "description": "올가 메추리알 장조림입니다. 짭조름한 간장 양념으로 밥반찬에 좋습니다.",
+    "price": 25300,
+    "categoryId": 5
+  },
+  {
+    "id": "7",
+    "productName": "올가 고단백 유기농 견과바 블랙 (99g) (33gx3개입)",
+    "category": "간식∙음료",
+    "description": "올가 유기농 견과바입니다. 단백질 보충용 간편 스낵입니다.",
+    "price": 27100,
+    "categoryId": 1
+  },
+  {
+    "id": "8",
+    "productName": "올가 ORGA 김밥용 김 (18g)",
+    "category": "국∙반찬",
+    "description": "올가 김밥용 김입니다. 김밥과 주먹밥용으로 활용됩니다.",
+    "price": 28400,
+    "categoryId": 5
+  },
+  {
+    "id": "9",
+    "productName": "올가 동물복지 닭다리살로 만든 닭갈비(냉동) (360g)",
+    "category": "정육∙달걀",
+    "description": "올가 냉동 닭갈비입니다. 매콤한 양념으로 간편 조리 가능합니다.",
+    "price": 5600,
+    "categoryId": 11
+  },
+  {
+    "id": "10",
+    "productName": "올가 현미 건빵 (150g)",
+    "category": "간식∙음료",
+    "description": "올가 현미 건빵입니다. 바삭한 식감의 간단한 간식입니다.",
+    "price": 23000,
+    "categoryId": 1
+  }
+]

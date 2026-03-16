@@ -43,7 +43,8 @@ class KnnSearchRequestSerializationTest {
             "djl://dummy",
             "classpath:/dummy",
             0.74,
-            300
+            300,
+            3
     );
     private final ElasticsearchSearchRequestBuilder searchRequestBuilder =
             new ElasticsearchSearchRequestBuilder(

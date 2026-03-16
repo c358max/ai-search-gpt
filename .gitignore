@@ -6,3 +6,4 @@ target/
 .DS_Store
 src/main/resources/model/multilingual-e5-small-ko-v2/multilingual-e5-small-ko-v2.pt
 src/main/resources/model/multilingual-e5-small-ko-v2/tokenizer.json
+_임시_

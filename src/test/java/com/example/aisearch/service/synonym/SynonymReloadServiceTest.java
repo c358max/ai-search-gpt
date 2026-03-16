@@ -63,7 +63,8 @@ class SynonymReloadServiceTest {
                 "djl://example",
                 "classpath:/model",
                 0.74,
-                300
+                300,
+                3
         );
     }
 }
