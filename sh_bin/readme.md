@@ -75,6 +75,22 @@
 - `minilm-l12`
 - `minilm-l6`
 
+전체 모델을 한 번에 실행할 수도 있습니다.
+```bash
+./sh_bin/30_start_all_model_web.sh
+./sh_bin/31_start_all_model_indexing_web.sh
+./sh_bin/32_stop_all_models.sh
+```
+
+`31_start_all_model_indexing_web.sh`는 각 모델별 색인과 웹 실행을 순차적으로 시작합니다.
+
+모델별 검색 결과 비교:
+```bash
+./sh_bin/33_compare_model_search.sh "어린이 간식"
+./sh_bin/34_compare_model_search_queries.sh
+./sh_bin/35_check_model_status.sh
+```
+
 ## 운영 상태 빠른 확인
 ```bash
 ./sh_bin/90_check_k8s_elastic_pods.sh

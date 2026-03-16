@@ -1,8 +1,7 @@
 server:
-  port: ${SERVER_PORT:8083}
+  port: ${SERVER_PORT:8093}
 
 ai-search:
   index-name: ${AI_SEARCH_ES_INDEX:food-products-minilm-l12}
   read-alias: ${AI_SEARCH_ES_READ_ALIAS:food-products-minilm-l12-read}
   embedding-model-path: ${AI_SEARCH_EMBED_MODEL_PATH:classpath:/model/minilm-l12}
-

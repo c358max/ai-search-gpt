@@ -1,8 +1,7 @@
 server:
-  port: ${SERVER_PORT:8081}
+  port: ${SERVER_PORT:8091}
 
 ai-search:
   index-name: ${AI_SEARCH_ES_INDEX:food-products-e5-small-ko-v2}
   read-alias: ${AI_SEARCH_ES_READ_ALIAS:food-products-e5-small-ko-v2-read}
   embedding-model-path: ${AI_SEARCH_EMBED_MODEL_PATH:classpath:/model/multilingual-e5-small-ko-v2}
-

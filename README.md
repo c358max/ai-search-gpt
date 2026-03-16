@@ -34,10 +34,10 @@
 - `model-minilm-l6`: `./gradlew bootRun --args='--spring.profiles.active=model-minilm-l6'`
 
 기본 포트/인덱스/alias는 프로필마다 분리되어 있습니다.
-- `model-e5-small-ko-v2`: `8081`, `food-products-e5-small-ko-v2`
-- `model-e5-small-ko`: `8082`, `food-products-e5-small-ko`
-- `model-minilm-l12`: `8083`, `food-products-minilm-l12`
-- `model-minilm-l6`: `8084`, `food-products-minilm-l6`
+- `model-e5-small-ko-v2`: `8091`, `food-products-e5-small-ko-v2`
+- `model-e5-small-ko`: `8092`, `food-products-e5-small-ko`
+- `model-minilm-l12`: `8093`, `food-products-minilm-l12`
+- `model-minilm-l6`: `8094`, `food-products-minilm-l6`
 
 색인까지 같이 하려면 프로필을 조합해서 실행합니다.
 - 예: `./gradlew bootRun --args='--spring.profiles.active=model-minilm-l12,indexing-web'`
@@ -48,3 +48,12 @@
 - 웹 실행: `./sh_bin/21_run_model_web.sh e5-small-ko-v2`
 - 색인 + 웹 실행: `./sh_bin/22_run_model_indexing_web.sh minilm-l12`
 - 색인만 실행: `./sh_bin/23_run_model_indexing_only.sh minilm-l6`
+- 전체 모델 웹 실행: `./sh_bin/30_start_all_model_web.sh`
+- 전체 모델 색인 + 웹 실행: `./sh_bin/31_start_all_model_indexing_web.sh`
+- 전체 모델 종료: `./sh_bin/32_stop_all_models.sh`
+- 모델 1개 쿼리 비교: `./sh_bin/33_compare_model_search.sh '어린이 간식'`
+- 대표 쿼리 일괄 비교: `./sh_bin/34_compare_model_search_queries.sh`
+- 모델 상태 확인: `./sh_bin/35_check_model_status.sh`
+
+기획자 검토 가이드:
+- [docs/13.model-review-guide.md](/Users/davidnam/Project/pulmuone/ai-search-gpt/docs/13.model-review-guide.md)

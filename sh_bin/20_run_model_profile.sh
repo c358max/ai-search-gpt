@@ -78,19 +78,19 @@ esac
 case "${MODEL_KEY}" in
   e5-small-ko-v2)
     PROFILE="model-e5-small-ko-v2"
-    DEFAULT_PORT=8081
+    DEFAULT_PORT=8091
     ;;
   e5-small-ko)
     PROFILE="model-e5-small-ko"
-    DEFAULT_PORT=8082
+    DEFAULT_PORT=8092
     ;;
   minilm-l12)
     PROFILE="model-minilm-l12"
-    DEFAULT_PORT=8083
+    DEFAULT_PORT=8093
     ;;
   minilm-l6)
     PROFILE="model-minilm-l6"
-    DEFAULT_PORT=8084
+    DEFAULT_PORT=8094
     ;;
   *)
     echo "[ERROR] unsupported model key: ${MODEL_KEY}"
