@@ -47,10 +47,14 @@ public class IndexRolloutService {
      * @throws RuntimeException 인덱스 생성/색인/alias 전환/정리 중 실패 시
      */
     public IndexRolloutResult rollOutFromSourceData() {
+        return rollOutFromSourceData(null);
+    }
+
+    public IndexRolloutResult rollOutFromSourceData(String dataPath) {
         String oldIndex = aliasSwitcher.findCurrentAliasedIndex();
         String newIndex = indexCreator.createVersionedIndex();
 
-        long indexedCount = productIndexingService.reindexData(newIndex);
+        long indexedCount = productIndexingService.reindexData(newIndex, dataPath);
 
         aliasSwitcher.swapReadAlias(oldIndex, newIndex);
         indexCleanupService.cleanupOldVersionedIndices(newIndex);
