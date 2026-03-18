@@ -3,24 +3,17 @@ package com.example.aisearch.service.search.categoryboost.store;
 import com.example.aisearch.config.AiSearchProperties;
 import com.example.aisearch.service.search.categoryboost.api.CategoryBoostRules;
 import com.example.aisearch.service.search.categoryboost.api.CategoryBoostRulesReloader;
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.example.aisearch.service.search.categoryboost.store.source.CategoryBoostRuleSnapshot;
+import com.example.aisearch.service.search.categoryboost.store.source.CategoryBoostRuleSource;
+import com.example.aisearch.service.search.categoryboost.store.source.FileCategoryBoostRuleSource;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.core.io.Resource;
-import org.springframework.core.io.ResourceLoader;
 import org.springframework.stereotype.Component;
 
-import java.io.IOException;
-import java.io.InputStream;
 import java.time.Duration;
-import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -29,44 +22,61 @@ import java.util.concurrent.atomic.AtomicReference;
 /**
  * category_boost.json 기반 룰 저장소 구현체.
  * 조회 계약(CategoryBoostRules)과 재로딩 계약(CategoryBoostRulesReloader)을 함께 제공한다.
+ *
+ * 이 클래스의 역할은 크게 4가지입니다.
+ * 1) JSON 파일에서 룰을 읽는다.
+ * 2) 메모리에 현재 룰 캐시를 보관한다.
+ * 3) 일정 주기(TTL)마다 version 값이 바뀌었는지 확인한다.
+ * 4) version 변경이 감지되면 전체 룰을 다시 읽어 캐시를 교체한다.
+ *
+ * 현재 클래스명은 기존 호환을 위해 유지하고 있지만,
+ * 내부적으로는 "source + cache/reload coordinator" 구조로 분리되어 있습니다.
+ *
+ * - store: 조회/재로딩 진입점
+ * - store.source: 룰을 어디서 읽을지 결정하는 협력 객체들
  */
 @Component
 public class JsonCategoryBoostRules implements CategoryBoostRules, CategoryBoostRulesReloader {
 
     private static final Logger log = LoggerFactory.getLogger(JsonCategoryBoostRules.class);
-    private static final String RULE_FILE_PATH = "classpath:data/category_boost.json";
     private static final String VERSION_CHECK_GATE_KEY = "version-check-gate";
 
-    private final ResourceLoader resourceLoader;
-    private final ObjectMapper objectMapper;
-    private volatile String ruleFilePath;
+    private final CategoryBoostRuleSource ruleSource;
+    // TTL 동안 "버전 체크를 이미 했다"는 사실만 기록하는 얇은 게이트 캐시다.
+    // 실제 룰 데이터는 currentEntry에 들어 있다.
     private final Cache<String, Boolean> versionCheckGate;
-    // JsonCategoryBoostRules_AtomicReference.md 문서 참고
+    // 현재 메모리에서 사용 중인 룰 스냅샷이다.
+    // 조회는 lock 없이 이 값을 읽고, 재로딩 시에만 새 스냅샷으로 통째 교체한다.
     private final AtomicReference<CategoryBoostCacheEntry> currentEntry;
 
     // 스프링 빈 생성용 기본 생성자:
     // 운영 기본 룰 경로(classpath:data/category_boost.json)와
     // application.yaml의 TTL 설정값(category-boost-cache-ttl-seconds)을 사용한다.
+    // 기본 file source와 application.yaml의 TTL 설정값을 사용한다.
     @Autowired
     public JsonCategoryBoostRules(
-            ResourceLoader resourceLoader,
-            ObjectMapper objectMapper,
+            CategoryBoostRuleSource ruleSource,
             AiSearchProperties properties
     ) {
-        this(resourceLoader, objectMapper, RULE_FILE_PATH, properties.categoryBoostCacheTtlSeconds());
+        this(ruleSource, properties.categoryBoostCacheTtlSeconds());
     }
 
-    // 테스트/수동 구성용 생성자:
-    // 호출자가 룰 파일 경로와 TTL을 직접 지정할 수 있다.
     public JsonCategoryBoostRules(
-            ResourceLoader resourceLoader,
-            ObjectMapper objectMapper,
+            org.springframework.core.io.ResourceLoader resourceLoader,
+            com.fasterxml.jackson.databind.ObjectMapper objectMapper,
             String ruleFilePath,
             long cacheTtlSeconds
     ) {
-        this.resourceLoader = resourceLoader;
-        this.objectMapper = objectMapper;
-        this.ruleFilePath = ruleFilePath;
+        this(new FileCategoryBoostRuleSource(resourceLoader, objectMapper, ruleFilePath), cacheTtlSeconds);
+    }
+
+    // 테스트/수동 구성용 생성자:
+    // 호출자가 file source 경로와 TTL을 직접 지정할 수 있다.
+    public JsonCategoryBoostRules(
+            CategoryBoostRuleSource ruleSource,
+            long cacheTtlSeconds
+    ) {
+        this.ruleSource = ruleSource;
         // 룰 파일 버전을 매 호출마다 확인하면 I/O 비용이 커지므로 TTL 동안 버전 체크를 생략한다.
         this.versionCheckGate = Caffeine.newBuilder()
                 .maximumSize(1)
@@ -79,7 +89,11 @@ public class JsonCategoryBoostRules implements CategoryBoostRules, CategoryBoost
     // 테스트나 운영 제어 코드에서 룰 경로를 교체할 때 사용한다.
     // 경로 변경 직후 다음 조회/재로딩에서 새 파일을 반영하도록 version check gate를 비운다.
     void setRuleFilePath(String ruleFilePath) {
-        this.ruleFilePath = ruleFilePath;
+        if (ruleSource instanceof FileCategoryBoostRuleSource fileRuleSource) {
+            fileRuleSource.setRuleFilePath(ruleFilePath);
+        } else {
+            throw new IllegalStateException("rule path switching is only supported for file-based source");
+        }
         this.versionCheckGate.invalidate(VERSION_CHECK_GATE_KEY);
     }
 
@@ -96,7 +110,8 @@ public class JsonCategoryBoostRules implements CategoryBoostRules, CategoryBoost
         if (keyword == null || keyword.isBlank()) {
             return Optional.empty();
         }
-        // TTL이 만료된 시점에만 버전 변경 여부를 확인해 필요 시 재로딩한다.
+        // 조회가 자주 들어오더라도 매번 파일을 읽지 않도록,
+        // TTL이 만료된 시점에만 version 변경 여부를 확인한다.
         refreshIfNeeded();
         Map<String, Double> boosts = currentEntry.get().rulesByKeyword().get(keyword);
         return boosts == null ? Optional.empty() : Optional.of(boosts);
@@ -105,7 +120,8 @@ public class JsonCategoryBoostRules implements CategoryBoostRules, CategoryBoost
     @Override
     public void reload() {
         synchronized (this) {
-            // 운영 중 수동 reload 요청 시 즉시 버전 확인/재로딩을 시도한다.
+            // 운영 중 수동 reload 요청은 TTL을 기다리지 않고
+            // 즉시 version 확인/재로딩을 시도하는 강제 경로다.
             if (checkAndReloadIfVersionChanged()) {
                 versionCheckGate.put(VERSION_CHECK_GATE_KEY, Boolean.TRUE);
             }
@@ -113,21 +129,24 @@ public class JsonCategoryBoostRules implements CategoryBoostRules, CategoryBoost
     }
 
     private void loadInitialRules() {
-        String path = currentRulePath();
         try {
-            currentEntry.set(loadAll(path));
+            // 애플리케이션 시작 시점에 첫 룰 스냅샷을 읽어 메모리에 올린다.
+            currentEntry.set(toCacheEntry(ruleSource.loadSnapshot()));
             versionCheckGate.put(VERSION_CHECK_GATE_KEY, Boolean.TRUE);
         } catch (Exception e) {
             // 초기 로딩 실패로 서비스 전체가 죽지 않도록 빈 룰로 시작한다.
-            log.warn("카테고리 부스팅 초기 룰 로딩 실패. 빈 룰로 동작합니다. path={}", path, e);
+            log.warn("카테고리 부스팅 초기 룰 로딩 실패. 빈 룰로 동작합니다. source={}", ruleSource.description(), e);
         }
     }
 
     private void refreshIfNeeded() {
+        // 게이트 캐시에 값이 있으면 아직 TTL이 살아 있다는 뜻이므로
+        // 이번 조회에서는 version 체크를 생략한다.
         if (versionCheckGate.getIfPresent(VERSION_CHECK_GATE_KEY) != null) {
             return;
         }
         synchronized (this) {
+            // 여러 스레드가 동시에 들어와도 한 번만 실제 체크하도록 이중 확인한다.
             if (versionCheckGate.getIfPresent(VERSION_CHECK_GATE_KEY) != null) {
                 return;
             }
@@ -138,167 +157,25 @@ public class JsonCategoryBoostRules implements CategoryBoostRules, CategoryBoost
     }
 
     private boolean checkAndReloadIfVersionChanged() {
-        String path = currentRulePath();
         try {
-            String newVersion = readVersion(path);
+            // 전체 파일을 다 읽기 전에 version만 먼저 확인해
+            // 실제 변경이 있을 때만 전체 룰을 다시 적재한다.
+            String newVersion = ruleSource.readVersion();
             CategoryBoostCacheEntry cached = currentEntry.get();
             // version 값이 바뀐 경우에만 전체 룰을 다시 읽어 캐시를 교체한다.
             if (!Objects.equals(cached.version(), newVersion)) {
-                currentEntry.set(loadAll(path));
+                currentEntry.set(toCacheEntry(ruleSource.loadSnapshot()));
             }
             return true;
         } catch (Exception e) {
             // 재로딩 중 오류가 나도 기존 캐시를 유지해 검색 품질 급락을 방지한다.
-            log.warn("카테고리 부스팅 룰 버전 확인/재로딩 실패. 기존 캐시를 유지합니다. path={}", path, e);
+            log.warn("카테고리 부스팅 룰 버전 확인/재로딩 실패. 기존 캐시를 유지합니다. source={}", ruleSource.description(), e);
             return false;
         }
     }
 
-    private CategoryBoostCacheEntry loadAll(String path) throws IOException {
-        Resource resource = resourceLoader.getResource(path);
-        try (InputStream inputStream = resource.getInputStream()) {
-            JsonNode root = objectMapper.readTree(inputStream);
-            ParsedCategoryBoostConfig parsed = parseConfig(root, path);
-            return new CategoryBoostCacheEntry(parsed.version(), toRuleMap(parsed.rules()));
-        }
-    }
-
-    private String readVersion(String path) throws IOException {
-        Resource resource = resourceLoader.getResource(path);
-        try (InputStream inputStream = resource.getInputStream()) {
-            JsonNode root = objectMapper.readTree(inputStream);
-            return parseConfig(root, path).version();
-        }
-    }
-
-    private Map<String, Map<String, Double>> toRuleMap(List<CategoryBoostingRule> rules) {
-        if (rules == null || rules.isEmpty()) {
-            return Map.of();
-        }
-        Map<String, Map<String, Double>> ruleMap = new LinkedHashMap<>();
-        for (CategoryBoostingRule rule : rules) {
-            if (rule == null || rule.keyword() == null) {
-                continue;
-            }
-            String keyword = rule.keyword().trim();
-            if (keyword.isBlank()) {
-                continue;
-            }
-            // 유효한 keyword + boost 맵이 모두 있을 때만 룰로 채택한다.
-            Map<String, Double> boosts = normalizeBoostMap(rule.categoryBoostById(), rule.categoryId(), rule.score());
-            if (boosts.isEmpty()) {
-                continue;
-            }
-            ruleMap.merge(keyword, boosts, JsonCategoryBoostRules::mergeBoostMaps);
-        }
-        return Map.copyOf(ruleMap);
-    }
-
-    private static Map<String, Double> mergeBoostMaps(Map<String, Double> left, Map<String, Double> right) {
-        Map<String, Double> merged = new LinkedHashMap<>(left);
-        merged.putAll(right);
-        return Map.copyOf(merged);
-    }
-
-    private Map<String, Double> normalizeBoostMap(
-            Map<String, Double> raw,
-            String categoryId,
-            Double score
-    ) {
-        if (raw != null && !raw.isEmpty()) {
-            return normalizeCategoryBoostById(raw);
-        }
-
-        if (categoryId == null || categoryId.isBlank() || score == null) {
-            return Map.of();
-        }
-
-        Map<String, Double> normalized = new LinkedHashMap<>();
-        normalized.put(categoryId.trim(), normalizeScore(score));
-        return Map.copyOf(normalized);
-    }
-
-    private Map<String, Double> normalizeCategoryBoostById(Map<String, Double> raw) {
-        Map<String, Double> normalized = new LinkedHashMap<>();
-        for (Map.Entry<String, Double> entry : raw.entrySet()) {
-            String key = entry.getKey();
-            Double value = entry.getValue();
-            if (key == null || key.isBlank() || value == null) {
-                continue;
-            }
-            // JSON 객체 키와 Painless params 맵 조회를 맞추기 위해 카테고리 ID를 문자열 키로 유지한다.
-            normalized.put(key.trim(), normalizeScore(value));
-        }
-        return Map.copyOf(normalized);
-    }
-
-    private double normalizeScore(Double rawScore) {
-        if (rawScore == null) {
-            throw new IllegalArgumentException("카테고리 부스팅 score 값이 비어 있습니다.");
-        }
-        // 운영 파일(category_boost.json)은 3/7/9 정수 스케일을 사용하므로 0.x 계수로 정규화한다.
-        return rawScore > 1.0 ? rawScore / 10.0 : rawScore;
-    }
-
-    private ParsedCategoryBoostConfig parseConfig(JsonNode root, String path) {
-        if (root == null || root.isNull()) {
-            throw new IllegalStateException("category_boost.json 내용이 비어 있습니다. path=" + path);
-        }
-
-        if (root.isArray()) {
-            List<CategoryBoostingRule> rules = objectMapper.convertValue(
-                    root,
-                    objectMapper.getTypeFactory().constructCollectionType(List.class, CategoryBoostingRule.class)
-            );
-            return new ParsedCategoryBoostConfig(buildArrayVersion(root), rules);
-        }
-
-        if (root.isObject()) {
-            CategoryBoostingConfig config = objectMapper.convertValue(root, CategoryBoostingConfig.class);
-            if (config == null || config.version() == null || config.version().isBlank()) {
-                throw new IllegalStateException("category_boost.json version 값이 유효하지 않습니다. path=" + path);
-            }
-            return new ParsedCategoryBoostConfig(config.version().trim(), config.rules());
-        }
-
-        throw new IllegalStateException("category_boost.json 형식이 올바르지 않습니다. path=" + path);
-    }
-
-    private String buildArrayVersion(JsonNode root) {
-        // 운영 파일은 version 필드가 없으므로 내용 기반 fingerprint로 변경 감지를 수행한다.
-        return Integer.toHexString(root.toString().hashCode());
-    }
-
-    private String currentRulePath() {
-        String path = ruleFilePath;
-        if (path == null || path.isBlank()) {
-            throw new IllegalStateException("카테고리 부스팅 룰 파일 경로가 비어 있습니다.");
-        }
-        return path;
-    }
-
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    private record CategoryBoostingConfig(
-            String version,
-            List<CategoryBoostingRule> rules
-    ) {
-    }
-
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    private record CategoryBoostingRule(
-            String keyword,
-            Map<String, Double> categoryBoostById,
-            @JsonProperty("category_id")
-            String categoryId,
-            @JsonProperty("score")
-            Double score
-    ) {
-    }
-
-    private record ParsedCategoryBoostConfig(
-            String version,
-            List<CategoryBoostingRule> rules
-    ) {
+    private CategoryBoostCacheEntry toCacheEntry(CategoryBoostRuleSnapshot snapshot) {
+        return new CategoryBoostCacheEntry(snapshot.version(), snapshot.rulesByKeyword());
     }
 
     private record CategoryBoostCacheEntry(
@@ -306,6 +183,8 @@ public class JsonCategoryBoostRules implements CategoryBoostRules, CategoryBoost
             Map<String, Map<String, Double>> rulesByKeyword
     ) {
         private static CategoryBoostCacheEntry empty() {
+            // 초기 로딩 실패 시에도 null 대신 빈 스냅샷을 유지해
+            // 조회 측 분기와 NPE 가능성을 줄인다.
             return new CategoryBoostCacheEntry("", Map.of());
         }
     }

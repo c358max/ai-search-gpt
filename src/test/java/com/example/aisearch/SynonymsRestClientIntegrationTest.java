@@ -2,29 +2,32 @@ package com.example.aisearch;
 
 import com.example.aisearch.service.indexing.orchestration.IndexRolloutService;
 import com.example.aisearch.service.synonym.SynonymReloadMode;
-import com.example.aisearch.support.RequiresElasticsearch;
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInstance;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 
-import java.net.URI;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@RequiresElasticsearch
+@SpringBootTest(
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        properties = {
+                "ai-search.index-name=synonym-rest-it-products",
+                "ai-search.read-alias=synonym-rest-it-products-read",
+                "ai-search.synonyms-set=synonym-rest-it-synonyms"
+        }
+)
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
-@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
-class SynonymsRestClientIntegrationTest extends TruststoreTestBase {
+class SynonymsRestClientIntegrationTest extends RestApiIntegrationTestBase {
 
     @LocalServerPort
     private int port;
@@ -32,11 +35,10 @@ class SynonymsRestClientIntegrationTest extends TruststoreTestBase {
     @Autowired
     private IndexRolloutService indexRolloutService;
 
-    private final HttpClient client = HttpClient.newHttpClient();
-    private final ObjectMapper objectMapper = new ObjectMapper();
-
     @BeforeAll
-    void setUp() {
+    void setUp() throws Exception {
+        printIsolationConfig("SynonymsRestClientIntegrationTest");
+        deleteAllVersionedIndices();
         indexRolloutService.rollOutFromSourceData();
     }
 
@@ -47,17 +49,16 @@ class SynonymsRestClientIntegrationTest extends TruststoreTestBase {
         } catch (Exception ignored) {
             // 테스트 본문의 실패 원인을 가리지 않기 위해 정리 단계 예외는 무시
         }
+        deleteAllVersionedIndices();
     }
 
     @Test
-    @Order(1)
     void 회귀동의어_적용후_딤섬_검색시_만두가_포함된다() throws Exception {
         reloadSynonymsAndAssert(SynonymReloadMode.REGRESSION);
         assertSynonymSearchContainsProduct("딤섬", "만두");
     }
 
     @Test
-    @Order(2)
     void 동의어_적용후_교자_검색시_만두가_포함된다() throws Exception {
         reloadSynonymsAndAssert(SynonymReloadMode.PRODUCTION);
         assertSynonymSearchContainsProduct("교자", "만두");
@@ -65,38 +66,29 @@ class SynonymsRestClientIntegrationTest extends TruststoreTestBase {
 
 
     @Test
-    @Order(3)
     void 동의어_적용후_얄피_검색시_생만두가_포함된다() throws Exception {
         reloadSynonymsAndAssert(SynonymReloadMode.PRODUCTION);
         assertSynonymSearchContainsProduct("얄피", "만두");
     }
 
     private HttpResponse<String> reloadSynonyms(SynonymReloadMode mode) throws Exception {
-        URI uri = URI.create("http://localhost:" + port + "/api/search/reload-synonyms");
         String body = """
                 {
                   "mode": "%s"
                 }
                 """.formatted(mode.name());
-
-        HttpRequest request = HttpRequest.newBuilder(uri)
-                .header("Content-Type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString(body))
-                .build();
-        return client.send(request, HttpResponse.BodyHandlers.ofString());
+        return postJson("/api/search/reload-synonyms", body);
     }
 
     private HttpResponse<String> search(String query, int size) throws Exception {
         String encodedQuery = URLEncoder.encode(query, StandardCharsets.UTF_8);
-        URI uri = URI.create("http://localhost:" + port + "/api/search?q=" + encodedQuery + "&page=1&size=" + size + "&sort=RELEVANCE_DESC");
-        HttpRequest request = HttpRequest.newBuilder(uri).GET().build();
-        return client.send(request, HttpResponse.BodyHandlers.ofString());
+        return get("/api/search?q=" + encodedQuery + "&page=1&size=" + size + "&sort=RELEVANCE_DESC");
     }
 
     private JsonNode reloadSynonymsAndAssert(SynonymReloadMode mode) throws Exception {
         HttpResponse<String> reloadResponse = reloadSynonyms(mode);
         assertEquals(200, reloadResponse.statusCode());
-        JsonNode reloadJson = objectMapper.readTree(reloadResponse.body());
+        JsonNode reloadJson = readJson(reloadResponse);
         assertTrue(reloadJson.path("updated").asBoolean(false));
         assertTrue(reloadJson.path("reloaded").asBoolean(false));
         assertEquals(mode.name(), reloadJson.path("mode").asText());
@@ -106,7 +98,7 @@ class SynonymsRestClientIntegrationTest extends TruststoreTestBase {
     private JsonNode searchAndAssertOk(String query, int size) throws Exception {
         HttpResponse<String> searchResponse = search(query, size);
         assertEquals(200, searchResponse.statusCode());
-        JsonNode searchJson = objectMapper.readTree(searchResponse.body());
+        JsonNode searchJson = readJson(searchResponse);
         assertTrue(searchJson.path("results").isArray());
         return searchJson;
     }
@@ -168,5 +160,10 @@ class SynonymsRestClientIntegrationTest extends TruststoreTestBase {
         String productName() {
             return source().path("goods_name").asText("");
         }
+    }
+
+    @Override
+    protected int port() {
+        return port;
     }
 }

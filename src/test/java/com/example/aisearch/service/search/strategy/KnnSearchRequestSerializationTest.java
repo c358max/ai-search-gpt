@@ -2,7 +2,6 @@ package com.example.aisearch.service.search.strategy;
 
 import co.elastic.clients.elasticsearch._types.query_dsl.Query;
 import co.elastic.clients.elasticsearch.core.SearchRequest;
-import co.elastic.clients.json.jackson.JacksonJsonpMapper;
 import com.example.aisearch.config.AiSearchProperties;
 import com.example.aisearch.model.search.SearchSortOption;
 import com.example.aisearch.service.search.categoryboost.policy.CategoryBoostBetaTuner;
@@ -11,12 +10,9 @@ import com.example.aisearch.service.search.query.HybridBaseQueryBuilder;
 import com.example.aisearch.service.search.query.SearchFilterQueryBuilder;
 import com.example.aisearch.service.search.strategy.request.ElasticsearchSearchRequestBuilder;
 import com.example.aisearch.service.search.strategy.script.PainlessHybridScoreScriptFactory;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.JsonNode;
-import jakarta.json.stream.JsonGenerator;
+import com.example.aisearch.support.SearchDebugPrintSupport;
 import org.junit.jupiter.api.Test;
 
-import java.io.StringWriter;
 import java.util.List;
 import java.util.Map;
 
@@ -47,7 +43,8 @@ class KnnSearchRequestSerializationTest {
             300L,
             5000L,
             1500L,
-            2
+            2,
+            3
     );
     private final ElasticsearchSearchRequestBuilder searchRequestBuilder =
             new ElasticsearchSearchRequestBuilder(
@@ -92,13 +89,11 @@ class KnnSearchRequestSerializationTest {
                 20
         );
 
-        String appleJson = toPrettyJson(appleEsRequest);
-        String filterOnlyJson = toPrettyJson(filterOnlyEsRequest);
+        String appleJson = SearchDebugPrintSupport.toPrettyJson(appleEsRequest);
+        String filterOnlyJson = SearchDebugPrintSupport.toPrettyJson(filterOnlyEsRequest);
 
-        System.out.println("=== CASE A: apple + CATEGORY_BOOSTING_DESC ===");
-        System.out.println(formatForConsole(appleJson));
-        System.out.println("=== CASE B: no query + categoryId filter + RELEVANCE_DESC ===");
-        System.out.println(formatForConsole(filterOnlyJson));
+        SearchDebugPrintSupport.printSearchRequest("CASE A: apple + CATEGORY_BOOSTING_DESC", appleEsRequest);
+        SearchDebugPrintSupport.printSearchRequest("CASE B: no query + categoryId filter + RELEVANCE_DESC", filterOnlyEsRequest);
 
         assertTrue(appleJson.contains("\"script_score\""));
         assertTrue(appleJson.contains("\"category_boost_by_id\""));
@@ -109,48 +104,4 @@ class KnnSearchRequestSerializationTest {
         assertTrue(!filterOnlyJson.contains("\"script_score\""));
     }
 
-    private static String toPrettyJson(SearchRequest request) throws Exception {
-        JacksonJsonpMapper mapper = new JacksonJsonpMapper();
-        StringWriter writer = new StringWriter();
-        JsonGenerator generator = mapper.jsonProvider().createGenerator(writer);
-        request.serialize(generator, mapper);
-        generator.close();
-        ObjectMapper objectMapper = new ObjectMapper();
-        return objectMapper.writerWithDefaultPrettyPrinter()
-                .writeValueAsString(objectMapper.readTree(writer.toString()));
-    }
-
-    private static String formatForConsole(String prettyJson) {
-        String withNewLines = prettyJson.replace("\\n", "\n");
-        String scriptSource = extractScriptSource(withNewLines);
-        if (scriptSource == null || scriptSource.isBlank()) {
-            return withNewLines;
-        }
-        return withNewLines
-                + "\n\n--- SCRIPT SOURCE (READABLE) ---\n"
-                + indent(scriptSource, "  ");
-    }
-
-    private static String extractScriptSource(String json) {
-        try {
-            JsonNode root = new ObjectMapper().readTree(json);
-            JsonNode sourceNode = root.path("query")
-                    .path("script_score")
-                    .path("script")
-                    .path("source");
-            if (sourceNode.isMissingNode() || sourceNode.isNull()) {
-                return null;
-            }
-            return sourceNode.asText();
-        } catch (Exception e) {
-            return null;
-        }
-    }
-
-    private static String indent(String text, String prefix) {
-        return text.lines()
-                .map(line -> prefix + line)
-                .reduce((a, b) -> a + "\n" + b)
-                .orElse("");
-    }
 }

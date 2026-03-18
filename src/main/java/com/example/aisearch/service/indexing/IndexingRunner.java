@@ -1,7 +1,7 @@
 package com.example.aisearch.service.indexing;
 
-import com.example.aisearch.service.indexing.orchestration.IndexRolloutResult;
 import com.example.aisearch.service.indexing.orchestration.IndexRolloutService;
+import com.example.aisearch.service.indexing.orchestration.result.IndexRolloutResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;

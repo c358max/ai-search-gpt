@@ -37,7 +37,17 @@ public class ProductIndexingService {
     }
 
     public long reindexData(String indexName) {
-        List<FoodProduct> foods = foodDataLoader.loadAll();
+        return indexFoods(indexName, foodDataLoader.loadAll());
+    }
+
+    public long reindexData(String indexName, String dataPath) {
+        List<FoodProduct> foods = dataPath == null || dataPath.isBlank()
+                ? foodDataLoader.loadAll()
+                : foodDataLoader.loadAll(dataPath);
+        return indexFoods(indexName, foods);
+    }
+
+    private long indexFoods(String indexName, List<FoodProduct> foods) {
         if (foods.isEmpty()) {
             return 0;
         }

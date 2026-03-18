@@ -1,6 +1,7 @@
 package com.example.aisearch.service.synonym;
 
 import com.example.aisearch.config.AiSearchProperties;
+import com.example.aisearch.service.synonym.exception.InvalidSynonymReloadRequestException;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -30,7 +31,7 @@ public class SynonymReloadService {
         String synonymsSet = resolveRequired(request.synonymsSet(), properties.synonymsSet(), "synonymsSet");
         List<String> rules = synonymRuleSource.loadRules(mode);
         if (rules.isEmpty()) {
-            throw new IllegalArgumentException("동의어 규칙이 비어 있습니다. mode=" + mode);
+            throw new InvalidSynonymReloadRequestException("동의어 규칙이 비어 있습니다. mode=" + mode);
         }
 
         synonymEsGateway.putSynonyms(synonymsSet, rules);
@@ -55,7 +56,7 @@ public class SynonymReloadService {
 
         List<String> rules = synonymRuleSource.loadRules(SynonymReloadMode.PRODUCTION);
         if (rules.isEmpty()) {
-            throw new IllegalArgumentException("운영 동의어 규칙이 비어 있습니다.");
+            throw new InvalidSynonymReloadRequestException("운영 동의어 규칙이 비어 있습니다.");
         }
         synonymEsGateway.putSynonyms(synonymsSet, rules);
     }
@@ -63,7 +64,7 @@ public class SynonymReloadService {
     private String resolveRequired(String requestValue, String propertyValue, String fieldName) {
         String resolved = (requestValue == null || requestValue.isBlank()) ? propertyValue : requestValue;
         if (resolved == null || resolved.isBlank()) {
-            throw new IllegalArgumentException(fieldName + " 값이 비어 있습니다.");
+            throw new InvalidSynonymReloadRequestException(fieldName + " 값이 비어 있습니다.");
         }
         return resolved;
     }

@@ -5,8 +5,8 @@ NAMESPACE="${NAMESPACE:-ai-search}"
 
 MODELS=(
   "e5-small-ko-v2:8091:food-products-e5-small-ko-v2-read"
-  "kure-v1:8093:food-products-kure-v1-read"
-  "bge-m3:8095:food-products-bge-m3-read"
+  "kure-v1:8092:food-products-kure-v1-read"
+  "bge-m3:8093:food-products-bge-m3-read"
 )
 
 require_command() {

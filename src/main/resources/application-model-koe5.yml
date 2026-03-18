@@ -1,5 +1,5 @@
 server:
-  port: ${SERVER_PORT:8094}
+  port: ${SERVER_PORT:8095}
 
 ai-search:
   model-key: koe5

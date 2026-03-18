@@ -1,207 +1,197 @@
-## AS-IS / TO-BE 비교
+## JsonCategoryBoostRules 구조 변경 메모
 
-### AS-IS (Supplier 사용)
+이 문서는 과거 `Supplier<String>` 기반 구현에서, 현재의 `CategoryBoostRuleSource` 기반 구조로 왜 바뀌었는지 설명합니다.
 
-경로 값을 직접 들고 있지 않고, `Supplier<String>`를 통해 필요 시 꺼내 쓰는 구조였습니다.
+핵심 변화는 단순합니다.
 
-```java
-private final Supplier<String> ruleFilePathSupplier;
+- 과거:
+  - `JsonCategoryBoostRules`가 파일 경로 관리, 파일 읽기, JSON 파싱, 캐시, reload를 모두 담당
+- 현재:
+  - `JsonCategoryBoostRules`는 캐시/reload coordinator 역할에 집중
+  - 파일 읽기/파싱은 `store.source.FileCategoryBoostRuleSource`로 분리
+  - 향후 DB 확장을 위해 `CategoryBoostRuleSource` 인터페이스 도입
 
-public JsonCategoryBoostRules(
-        ResourceLoader resourceLoader,
-        ObjectMapper objectMapper,
-        String ruleFilePath,
-        long cacheTtlSeconds
-) {
-    this(resourceLoader, objectMapper, () -> ruleFilePath, cacheTtlSeconds);
-}
+## 1. 예전 구조의 한계
 
-private String currentRulePath() {
-    String path = ruleFilePathSupplier.get();
-    if (path == null || path.isBlank()) {
-        throw new IllegalStateException("카테고리 부스팅 룰 파일 경로가 비어 있습니다.");
-    }
-    return path;
-}
-```
-
-특징:
-
-- 테스트에서 `AtomicReference<String>` + `pathRef::get`으로 경로 변경 시나리오를 만들기 쉬움
-- 반면 코드만 읽으면 "왜 함수형 인터페이스를 썼는지"를 추가로 해석해야 함
-
-### TO-BE (String + setter 사용)
-
-경로를 문자열 필드로 직접 관리하고, 필요 시 setter로 변경하는 구조입니다.
+과거에는 `JsonCategoryBoostRules`가 파일 경로를 직접 들고 있었습니다.
 
 ```java
 private volatile String ruleFilePath;
+```
 
+그리고 내부에서 직접:
+
+- 현재 경로 확인
+- 파일 열기
+- version 읽기
+- 전체 룰 읽기
+- 룰 정규화
+
+를 모두 처리했습니다.
+
+이 구조는 작은 규모에서는 단순했지만, 나중에 DB 같은 다른 저장소를 붙이려면 아래 문제가 생깁니다.
+
+- `if (file) ... else if (db) ...` 분기가 저장소 내부로 들어올 가능성
+- 파일/DB별 읽기 로직과 캐시/reload 로직이 다시 섞일 가능성
+- "어디서 읽는가"와 "언제 다시 읽는가"가 한 클래스에 같이 남는 문제
+
+## 2. 현재 구조
+
+현재는 source abstraction을 도입했습니다.
+
+### 2.1 공통 계약
+
+```java
+public interface CategoryBoostRuleSource {
+    String readVersion() throws IOException;
+    CategoryBoostRuleSnapshot loadSnapshot() throws IOException;
+    String description();
+}
+```
+
+이 계약의 의미:
+
+- `readVersion()`
+  - 원천 데이터가 바뀌었는지 빠르게 판단하기 위한 version 조회
+- `loadSnapshot()`
+  - 현재 룰 전체를 메모리에 올릴 스냅샷으로 변환
+- `description()`
+  - 로그/디버깅용 설명 문자열
+
+### 2.2 파일 구현체
+
+현재 운영 구현체는 `store.source.FileCategoryBoostRuleSource`입니다.
+
+```java
+@Component
+public class FileCategoryBoostRuleSource implements CategoryBoostRuleSource
+```
+
+책임:
+
+- 파일 열기
+- JSON 파싱
+- 룰 정규화
+
+비책임:
+
+- TTL gate
+- 메모리 캐시
+- reload orchestration
+
+### 2.3 캐시/reload 저장소
+
+`JsonCategoryBoostRules`는 이제 source를 주입받아 사용합니다.
+
+```java
+@Autowired
 public JsonCategoryBoostRules(
-        ResourceLoader resourceLoader,
-        ObjectMapper objectMapper,
-        String ruleFilePath,
-        long cacheTtlSeconds
+        CategoryBoostRuleSource ruleSource,
+        AiSearchProperties properties
 ) {
-    this.resourceLoader = resourceLoader;
-    this.objectMapper = objectMapper;
-    this.ruleFilePath = ruleFilePath;
-    this.versionCheckGate = Caffeine.newBuilder()
-            .maximumSize(1)
-            .expireAfterWrite(Duration.ofSeconds(Math.max(1L, cacheTtlSeconds)))
-            .build();
-    this.currentEntry = new AtomicReference<>(CategoryBoostCacheEntry.empty());
-    loadInitialRules();
-}
-
-void setRuleFilePath(String ruleFilePath) {
-    this.ruleFilePath = ruleFilePath;
-    this.versionCheckGate.invalidate(VERSION_CHECK_GATE_KEY);
-}
-
-private String currentRulePath() {
-    String path = ruleFilePath;
-    if (path == null || path.isBlank()) {
-        throw new IllegalStateException("카테고리 부스팅 룰 파일 경로가 비어 있습니다.");
-    }
-    return path;
+    this(ruleSource, properties.categoryBoostCacheTtlSeconds());
 }
 ```
 
-특징:
+즉, 현재 `JsonCategoryBoostRules`의 책임은 다음으로 줄었습니다.
 
-- 생성자와 필드 의미가 직관적이라 읽기 쉬움
-- 함수형 인터페이스 개념이 없어도 이해 가능
-- 경로 변경 시 `versionCheckGate`를 비워 다음 조회/재로딩에서 즉시 새 경로 반영
+- 현재 룰 캐시 보관
+- TTL 동안 version check 생략
+- 필요 시 `ruleSource`를 통해 version 확인
+- 변경 감지 시 새 스냅샷으로 교체
 
-## 1) 함수형 인터페이스(Supplier) 기초 설명
+## 3. 왜 Supplier보다 source abstraction이 더 적절한가
 
-함수형 인터페이스는 "메서드가 1개인 인터페이스"입니다.  
-대표 예시:
+과거 `Supplier<String>`는 "경로를 필요할 때 꺼내 쓰는 방식"이었습니다.
 
-```java
-Supplier<String> s = () -> "value";
-String v = s.get();
-```
+이 방식은 "경로 값 1개를 바꾸는 문제"에는 유효했지만,  
+지금 고민은 "파일 외의 다른 저장소를 붙일 수 있어야 한다"는 확장 문제입니다.
 
-- `Supplier<T>`: 값을 "필요할 때 꺼내주는" 함수
-- `Function<T, R>`: 입력을 받아 출력으로 바꾸는 함수
-- `Consumer<T>`: 입력을 받아 처리만 하고 반환값 없음
+즉, 현재 필요한 추상화는:
 
-과거 `JsonCategoryBoostRules`는 경로를 동적으로 바꾸는 테스트를 위해 `Supplier<String>`을 사용했습니다.
+- 경로 공급 추상화
 
+가 아니라
 
+- 룰 원천(source) 추상화
 
+입니다.
 
-## 2) 지금 구조가 더 단순한 이유
+이 차이가 중요합니다.
 
-현재는 `Supplier<String>` 대신 문자열 필드 + setter를 사용합니다.
+- `Supplier<String>`
+  - 무엇을 읽을지(경로)를 늦게 결정
+- `CategoryBoostRuleSource`
+  - 어디서 읽을지(파일/DB 등)를 바꿀 수 있음
 
-```java
-private volatile String ruleFilePath;
+## 4. 테스트 편의성은 어떻게 유지하나
 
-void setRuleFilePath(String ruleFilePath) {
-    this.ruleFilePath = ruleFilePath;
-    this.versionCheckGate.invalidate(VERSION_CHECK_GATE_KEY);
-}
-```
+기존 테스트는 경로를 바꿔 reload를 확인했습니다.
 
-장점:
-
-- 생성자 시그니처가 단순해짐
-- "경로 값"이라는 의도가 직관적임
-- 함수형 개념을 몰라도 읽기 쉬움
-
-## 3) 테스트 코드 비교 (AS-IS vs TO-BE)
-
-### AS-IS 테스트 (Supplier + AtomicReference)
+현재도 이 흐름은 유지됩니다.
 
 ```java
-@Test
-void shouldReloadRulesWhenVersionChangesByPathSwitching() {
-    AtomicReference<String> pathRef = new AtomicReference<>("classpath:data/category_boosting_v1.json");
-    JsonCategoryBoostRules rules = new JsonCategoryBoostRules(
-            new DefaultResourceLoader(),
-            new ObjectMapper(),
-            pathRef::get,
-            300
-    );
+JsonCategoryBoostRules rules = new JsonCategoryBoostRules(
+        new DefaultResourceLoader(),
+        new ObjectMapper(),
+        "classpath:data/category_boosting_v1.json",
+        300
+);
 
-    assertEquals(0.20, rules.findByKeyword("사과").orElseThrow().get("4"));
-
-    pathRef.set("classpath:data/category_boosting_v2.json");
-    rules.reload();
-
-    assertEquals(0.30, rules.findByKeyword("사과").orElseThrow().get("4"));
-}
+rules.setRuleFilePath("classpath:data/category_boosting_v2.json");
+rules.reload();
 ```
 
-특징:
+차이는 내부 구현뿐입니다.
 
-- `pathRef::get`으로 경로를 지연 조회
-- 람다 캡처 제약 때문에 `AtomicReference`를 같이 알아야 이해가 쉬움
+- 예전: `JsonCategoryBoostRules`가 직접 경로를 들고 변경
+- 현재: 내부의 `FileCategoryBoostRuleSource`가 경로를 변경
 
-AtomicReference를 사용한 이유:
+즉, 테스트 사용성은 유지하면서 역할 분리만 좋아진 상태입니다.
 
-- Java 람다는 지역 변수를 캡처할 때 해당 변수가 사실상 final(`effectively final`)이어야 합니다.
-- 즉, 아래처럼 단순 `String path`를 람다에서 참조하면 나중에 `path = "..."`로 값을 바꿀 수 없습니다.
-- 그래서 참조 자체는 final로 두고, 내부 값만 바꿀 수 있는 `AtomicReference<String>`를 사용했습니다.
+## 5. DbCategoryBoostRuleSource를 왜 미리 만들었나
+
+현재는 파일 기반 구현만 활성화되어 있지만, DB 확장을 고려해 아래 클래스를 미리 만들었습니다.
 
 ```java
-// 이 패턴은 컴파일 에러가 발생한다(람다에서 캡처한 지역 변수 재할당)
-String path = "classpath:data/category_boosting_v1.json";
-Supplier<String> supplier = () -> path;
-path = "classpath:data/category_boosting_v2.json";
+public class DbCategoryBoostRuleSource implements CategoryBoostRuleSource
 ```
 
-```java
-// 참조는 고정하고 내부 값만 바꾸는 방식
-AtomicReference<String> pathRef = new AtomicReference<>("classpath:data/category_boosting_v1.json");
-Supplier<String> supplier = pathRef::get;
-pathRef.set("classpath:data/category_boosting_v2.json");
-```
+의도:
 
-### TO-BE 테스트 (String + setter)
+- source abstraction이 실제로 DB 확장 지점을 제공한다는 걸 코드 구조로 명확히 하기 위함
+- 나중에 DB 버전을 추가할 때 `JsonCategoryBoostRules` 캐시 로직을 다시 건드리지 않게 하기 위함
 
-```java
-@Test
-void shouldReloadRulesWhenVersionChangesByPathSwitching() {
-    JsonCategoryBoostRules rules = new JsonCategoryBoostRules(
-            new DefaultResourceLoader(),
-            new ObjectMapper(),
-            "classpath:data/category_boosting_v1.json",
-            300
-    );
+현재는 `@Component`를 붙이지 않았고, 구현도 비워둔 상태입니다.
 
-    assertEquals(0.20, rules.findByKeyword("사과").orElseThrow().get("4"));
+## 6. 현재 구조의 장점 요약
 
-    rules.setRuleFilePath("classpath:data/category_boosting_v2.json");
-    rules.reload();
+1. `JsonCategoryBoostRules`가 "언제 다시 읽을지"에 집중한다.
+2. `FileCategoryBoostRuleSource`가 "파일에서 어떻게 읽을지"에 집중한다.
+3. 파일 외 저장소(DB)를 추가해도 캐시/reload 로직을 재사용할 수 있다.
+4. 읽는 사람이 클래스 책임을 더 쉽게 구분할 수 있다.
 
-    assertEquals(0.30, rules.findByKeyword("사과").orElseThrow().get("4"));
-}
-```
+## 7. 결론
 
-특징:
+이제 핵심 분리는 이렇게 이해하면 됩니다.
 
-- 경로 변경 의도가 메서드 이름으로 직접 드러남
-- 함수형 인터페이스/람다 캡처 지식 없이도 흐름 파악이 쉬움
+- `CategoryBoostRuleSource`
+  - 룰 원천 추상화
+- `FileCategoryBoostRuleSource`
+  - 파일에서 version + 룰 스냅샷 읽기
+- `JsonCategoryBoostRules`
+  - 현재 룰 캐시 보관 + reload coordination
 
-## 4) 종합 결론: 어느 방식이 더 나은가?
+패키지 기준으로 보면 구조는 이렇게 읽으면 됩니다.
 
-현재 요구사항(룰 파일 경로 1개를 관리하고, 테스트에서 가끔 경로를 바꿔 재로딩 검증)에서는  
-`String + setter` 방식이 더 적합합니다.
+- `...categoryboost.store`
+  - 외부에서 사용하는 진입점: `JsonCategoryBoostRules`
+- `...categoryboost.store.source`
+  - 진입점이 의존하는 룰 원천 계층
+  - `CategoryBoostRuleSource`
+  - `FileCategoryBoostRuleSource`
+  - `DbCategoryBoostRuleSource`
+  - `CategoryBoostRuleSnapshot`
 
-이유:
-
-- 코드 의도가 직접적이다: "경로를 설정하고 reload 한다"
-- 팀 온보딩이 쉽다: 함수형 인터페이스와 람다 캡처 규칙을 몰라도 이해 가능
-- 유지보수 포인트가 줄어든다: 생성자/필드 구조가 단순해진다
-
-`Supplier` 방식이 유리한 경우:
-
-- 경로를 외부 상태에 따라 매번 동적으로 계산해야 하거나
-- 값 공급 전략 자체를 주입해서 바꿔야 하는 확장 요구가 있을 때
-
-이 프로젝트의 현재 문맥에서는 그런 요구가 강하지 않으므로,  
-`String + setter`가 가독성과 실용성 측면에서 더 좋은 선택입니다.
+즉, 현재 구조는 "Supplier 제거"보다 한 단계 더 나아가  
+"저장소 원천(source)과 캐시/reload 정책을 분리"한 구조라고 보는 게 맞습니다.

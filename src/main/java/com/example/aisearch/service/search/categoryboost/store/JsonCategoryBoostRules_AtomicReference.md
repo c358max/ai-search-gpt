@@ -1,6 +1,13 @@
 # JsonCategoryBoostRules: AtomicReference 사용 이유
 
-이 문서는 `JsonCategoryBoostRules`에서 왜 `AtomicReference`를 사용하는지, 그리고 과거에 쓰던 `Supplier<String>` 같은 함수형 인터페이스와 어떤 차이가 있는지 기초부터 설명합니다.
+이 문서는 `JsonCategoryBoostRules`에서 왜 `AtomicReference`를 사용하는지 설명합니다.
+
+현재 구조 기준으로 보면:
+
+- 파일 읽기/JSON 파싱은 `store.source.FileCategoryBoostRuleSource`
+- 캐시 보관/reload orchestration은 `JsonCategoryBoostRules`
+
+로 역할이 나뉘어 있습니다.
 
 ## 1) 먼저 문제를 단순화해서 보기
 
@@ -35,7 +42,7 @@ Map<String, Double> boosts = currentEntry.get().rulesByKeyword().get(keyword);
 
 ```java
 if (!Objects.equals(cached.version(), newVersion)) {
-    currentEntry.set(loadAll(path));
+    currentEntry.set(toCacheEntry(ruleSource.loadSnapshot()));
 }
 ```
 
@@ -48,9 +55,12 @@ if (!Objects.equals(cached.version(), newVersion)) {
 이 클래스에서 Caffeine(`versionCheckGate`)은 **룰 데이터 저장소**가 아니라 **버전 체크 빈도 제한(TTL gate)** 용도입니다.
 
 - `versionCheckGate`: "지금 버전 체크를 생략해도 되는가?"
-- `currentEntry`: "실제 룰 데이터는 무엇인가?"
+- `currentEntry`: "실제 룰 스냅샷은 무엇인가?"
 
 역할을 분리해서 코드가 단순해집니다.
+
+즉, 실제 룰 데이터의 소유자는 `AtomicReference` 쪽이고,  
+Caffeine은 "버전 확인을 너무 자주 하지 않도록 막는 장치"일 뿐입니다.
 
 ## 4) AtomicReference를 잘 모를 때 기억할 핵심
 
@@ -68,5 +78,12 @@ if (!Objects.equals(cached.version(), newVersion)) {
 
 1. `AtomicReference`는 "현재 룰 스냅샷"을 안전하게 교체하기 위한 장치다.
 2. Caffeine은 "버전 체크 빈도 제한"용이며, 룰 본문 저장 역할이 아니다.
-3. 함수형 인터페이스(`Supplier`)는 값 제공 함수를 표현하지만, 현재는 단순 문자열 경로가 더 읽기 쉽다.
+3. 현재는 파일 로딩이 source로 분리되어, `JsonCategoryBoostRules`는 캐시/reload coordination에 집중한다.
 4. 결과적으로 이 클래스는 "빠른 읽기 + 안전한 스냅샷 교체"를 목표로 설계되어 있다.
+
+패키지로도 이 의도가 드러납니다.
+
+- `...categoryboost.store`
+  - 캐시와 재로딩을 담당하는 진입점
+- `...categoryboost.store.source`
+  - 실제 룰 원천을 읽는 협력 객체들

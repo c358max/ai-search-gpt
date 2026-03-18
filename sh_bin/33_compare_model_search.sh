@@ -7,8 +7,8 @@ PAGE="${PAGE:-1}"
 
 MODELS=(
   "e5-small-ko-v2:8091"
-  "kure-v1:8093"
-  "bge-m3:8095"
+  "kure-v1:8092"
+  "bge-m3:8093"
 )
 
 urlencode() {

@@ -1,5 +1,5 @@
 server:
-  port: ${SERVER_PORT:8092}
+  port: ${SERVER_PORT:8094}
 
 ai-search:
   model-key: e5-small-ko

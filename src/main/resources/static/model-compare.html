@@ -321,8 +321,8 @@
     const host = window.location.hostname || "localhost";
     const models = [
         { key: "e5-small-ko-v2", label: "E5 Small KO v2", port: 8091 },
-        { key: "kure-v1", label: "KURE-v1", port: 8093 },
-        { key: "bge-m3", label: "BGE-M3", port: 8095 }
+        { key: "kure-v1", label: "KURE-v1", port: 8092 },
+        { key: "bge-m3", label: "BGE-M3", port: 8093 }
     ];
 
     const presetQueries = [
@@ -447,14 +447,23 @@
         } else {
             results.forEach((item, index) => {
                 const source = item.source || {};
+                const name = source.goods_name ?? source.product_name ?? source.name ?? "(상품명 없음)";
+                const categoryName = source.lev3_category_id_name
+                    ?? source.category
+                    ?? source.category_name
+                    ?? "-";
+                const price = source.sale_price
+                    ?? source.price
+                    ?? source.recommended_price
+                    ?? "-";
                 const card = document.createElement("article");
                 card.className = "result";
                 card.innerHTML = `
                     <span class="rank">${index + 1}위</span>
-                    <p class="name">${source.goods_name ?? "(상품명 없음)"}</p>
+                    <p class="name">${name}</p>
                     <dl>
-                        <div><span>카테고리</span><span>${source.lev3_category_id_name ?? "-"}</span></div>
-                        <div><span>가격</span><span>${source.sale_price ?? "-"}</span></div>
+                        <div><span>카테고리</span><span>${categoryName}</span></div>
+                        <div><span>가격</span><span>${price}</span></div>
                         <div><span>점수</span><span>${item.score ?? "-"}</span></div>
                     </dl>
                 `;

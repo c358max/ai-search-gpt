@@ -1,5 +1,7 @@
 package com.example.aisearch.service.synonym;
 
+import com.example.aisearch.service.synonym.exception.InvalidSynonymReloadRequestException;
+
 import java.util.Locale;
 
 public enum SynonymReloadMode {
@@ -13,7 +15,7 @@ public enum SynonymReloadMode {
         try {
             return SynonymReloadMode.valueOf(rawMode.trim().toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("invalid reload mode: " + rawMode);
+            throw new InvalidSynonymReloadRequestException("invalid reload mode: " + rawMode);
         }
     }
 }

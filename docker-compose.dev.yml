@@ -22,9 +22,9 @@ services:
     container_name: ai-search-kure-v1
     restart: unless-stopped
     ports:
-      - "${AI_SEARCH_PORT_KURE_V1:-8093}:8093"
+      - "${AI_SEARCH_PORT_KURE_V1:-8092}:8092"
     environment:
-      SERVER_PORT: 8093
+      SERVER_PORT: 8092
       SPRING_PROFILES_ACTIVE: model-kure-v1${MODEL_EXTRA_PROFILES:-,search-vector-only}
       AI_SEARCH_ES_URL: ${AI_SEARCH_ES_URL}
       AI_SEARCH_ES_USERNAME: ${AI_SEARCH_ES_USERNAME}
@@ -41,9 +41,9 @@ services:
     restart: unless-stopped
     profiles: ["optional"]
     ports:
-      - "${AI_SEARCH_PORT_BGE_M3:-8095}:8095"
+      - "${AI_SEARCH_PORT_BGE_M3:-8093}:8093"
     environment:
-      SERVER_PORT: 8095
+      SERVER_PORT: 8093
       SPRING_PROFILES_ACTIVE: model-bge-m3${MODEL_EXTRA_PROFILES:-,search-vector-only}
       AI_SEARCH_ES_URL: ${AI_SEARCH_ES_URL}
       AI_SEARCH_ES_USERNAME: ${AI_SEARCH_ES_USERNAME}

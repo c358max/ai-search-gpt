@@ -61,6 +61,10 @@ public record AiSearchProperties(
     /**
      * 검색어 임베딩 생성용 스레드 수
      */
-    int queryEmbeddingExecutorThreads
+    int queryEmbeddingExecutorThreads,
+    /**
+     * 보관할 버전 인덱스 개수(현재 alias 대상 포함)
+     */
+    int indexRetentionCount
 ) {
 }

@@ -34,8 +34,8 @@
 
 기본 포트/인덱스/alias는 프로필마다 분리되어 있습니다.
 - `model-e5-small-ko-v2`: `8091`, `food-products-e5-small-ko-v2`
-- `model-kure-v1`: `8093`, `food-products-kure-v1`
-- `model-bge-m3`: `8095`, `food-products-bge-m3`
+- `model-kure-v1`: `8092`, `food-products-kure-v1`
+- `model-bge-m3`: `8093`, `food-products-bge-m3`
 
 색인까지 같이 하려면 프로필을 조합해서 실행합니다.
 - 예: `./gradlew bootRun --args='--spring.profiles.active=model-kure-v1,indexing-web'`

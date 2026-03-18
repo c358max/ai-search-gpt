@@ -4,6 +4,7 @@ import com.example.aisearch.service.indexing.bootstrap.ingest.ProductIndexingSer
 import com.example.aisearch.service.indexing.domain.AliasSwitcher;
 import com.example.aisearch.service.indexing.domain.IndexCleanupService;
 import com.example.aisearch.service.indexing.domain.IndexCreator;
+import com.example.aisearch.service.indexing.orchestration.result.IndexRolloutResult;
 import org.springframework.stereotype.Service;
 
 /**
@@ -14,7 +15,7 @@ import org.springframework.stereotype.Service;
  * 2) 신규 버전 인덱스 생성(매핑/세팅 반영)
  * 3) 소스 데이터를 신규 인덱스로 색인
  * 4) read alias를 기존 -> 신규 인덱스로 전환
- * 5) 기존 인덱스 정리(삭제)
+ * 5) 보관 정책에 따라 과거 버전 인덱스 정리
  *
  * 목적:
  * - 무중단에 가까운 인덱스 교체
@@ -47,13 +48,17 @@ public class IndexRolloutService {
      * @throws RuntimeException 인덱스 생성/색인/alias 전환/정리 중 실패 시
      */
     public IndexRolloutResult rollOutFromSourceData() {
+        return rollOutFromSourceData(null);
+    }
+
+    public IndexRolloutResult rollOutFromSourceData(String dataPath) {
         String oldIndex = aliasSwitcher.findCurrentAliasedIndex();
         String newIndex = indexCreator.createVersionedIndex();
 
-        long indexedCount = productIndexingService.reindexData(newIndex);
+        long indexedCount = productIndexingService.reindexData(newIndex, dataPath);
 
         aliasSwitcher.swapReadAlias(oldIndex, newIndex);
-        indexCleanupService.deleteIndexIfExists(oldIndex);
+        indexCleanupService.cleanupOldVersionedIndices(newIndex);
 
         return new IndexRolloutResult(oldIndex, newIndex, indexedCount);
     }

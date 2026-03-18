@@ -12,8 +12,8 @@ MODELS=(
 port_for_model() {
   case "$1" in
     e5-small-ko-v2) echo "8091" ;;
-    kure-v1) echo "8093" ;;
-    bge-m3) echo "8095" ;;
+    kure-v1) echo "8092" ;;
+    bge-m3) echo "8093" ;;
     *) return 1 ;;
   esac
 }

@@ -67,7 +67,8 @@ class SynonymReloadServiceTest {
                 300L,
                 5000L,
                 1500L,
-                2
+                2,
+                3
         );
     }
 }

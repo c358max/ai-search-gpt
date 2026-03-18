@@ -31,13 +31,17 @@ public class K8sPortForwarder {
     // 아직 포트포워딩이 없으면 시작한다 (중복 실행 방지)
     public void ensurePortForward(String namespace, String serviceName, int localPort, int remotePort)
             throws Exception {
-        if (handleRef.get() != null) {
+        ElasticsearchK8sHelper.PortForwardHandle existing = handleRef.get();
+        if (existing != null && existing.process() != null && existing.process().isAlive()) {
             return;
         }
+        handleRef.set(null);
         ElasticsearchK8sHelper.PortForwardHandle handle =
                 ElasticsearchK8sHelper.startPortForward(namespace, serviceName, localPort, remotePort);
         // 최초 성공한 핸들만 저장
-        handleRef.compareAndSet(null, handle);
+        if (!handleRef.compareAndSet(null, handle)) {
+            handle.close();
+        }
         // 포트포워딩이 준비될 시간을 약간 준다
         Thread.sleep(3000L);
         log.info("[ES_AUTO] port-forward started: {} -> {}", localPort, remotePort);

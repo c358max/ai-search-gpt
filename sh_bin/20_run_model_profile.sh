@@ -83,19 +83,19 @@ case "${MODEL_KEY}" in
     ;;
   e5-small-ko)
     PROFILE="model-e5-small-ko"
-    DEFAULT_PORT=8092
+    DEFAULT_PORT=8094
     ;;
   kure-v1)
     PROFILE="model-kure-v1"
-    DEFAULT_PORT=8093
+    DEFAULT_PORT=8092
     ;;
   koe5)
     PROFILE="model-koe5"
-    DEFAULT_PORT=8094
+    DEFAULT_PORT=8095
     ;;
   bge-m3)
     PROFILE="model-bge-m3"
-    DEFAULT_PORT=8095
+    DEFAULT_PORT=8093
     ;;
   *)
     echo "[ERROR] unsupported model key: ${MODEL_KEY}"

@@ -19,7 +19,11 @@ class QueryEmbeddingServiceTest {
     @Test
     void shouldReuseCachedEmbeddingForNormalizedQuery() {
         CountingEmbeddingService embeddingService = new CountingEmbeddingService(0L);
-        QueryEmbeddingService queryEmbeddingService = new QueryEmbeddingService(embeddingService, testProperties(1000L, 100L));
+        QueryEmbeddingService queryEmbeddingService = new QueryEmbeddingService(
+                embeddingService,
+                new EmbeddingInputFormatter(testProperties(1000L, 100L)),
+                testProperties(1000L, 100L)
+        );
         try {
             List<Float> first = queryEmbeddingService.toQueryEmbedding("  어린이   간식 ");
             List<Float> second = queryEmbeddingService.toQueryEmbedding("어린이 간식");
@@ -34,7 +38,11 @@ class QueryEmbeddingServiceTest {
     @Test
     void shouldDeduplicateConcurrentEmbeddingRequests() throws Exception {
         CountingEmbeddingService embeddingService = new CountingEmbeddingService(200L);
-        QueryEmbeddingService queryEmbeddingService = new QueryEmbeddingService(embeddingService, testProperties(1000L, 100L));
+        QueryEmbeddingService queryEmbeddingService = new QueryEmbeddingService(
+                embeddingService,
+                new EmbeddingInputFormatter(testProperties(1000L, 100L)),
+                testProperties(1000L, 100L)
+        );
         try (var executor = Executors.newFixedThreadPool(2)) {
             CountDownLatch startLatch = new CountDownLatch(1);
 
@@ -62,7 +70,11 @@ class QueryEmbeddingServiceTest {
     @Test
     void shouldThrowWhenEmbeddingGenerationTimesOut() {
         CountingEmbeddingService embeddingService = new CountingEmbeddingService(200L);
-        QueryEmbeddingService queryEmbeddingService = new QueryEmbeddingService(embeddingService, testProperties(50L, 100L));
+        QueryEmbeddingService queryEmbeddingService = new QueryEmbeddingService(
+                embeddingService,
+                new EmbeddingInputFormatter(testProperties(50L, 100L)),
+                testProperties(50L, 100L)
+        );
         try {
             assertThrows(
                     QueryEmbeddingUnavailableException.class,
@@ -90,7 +102,8 @@ class QueryEmbeddingServiceTest {
                 cacheTtlSeconds,
                 100L,
                 timeoutMillis,
-                2
+                2,
+                3
         );
     }
 

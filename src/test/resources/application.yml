@@ -15,6 +15,7 @@ ai-search:
   embedding-model-path: ${AI_SEARCH_EMBED_MODEL_PATH:classpath:/model/${ai-search.model-path-segment}}
   embedding-model-url: ${AI_SEARCH_EMBED_MODEL:djl://ai.djl.huggingface.pytorch/multilingual-e5-small-ko-v2}
   min-score-threshold: ${AI_SEARCH_MIN_SCORE:0.71}
+  index-retention-count: ${AI_SEARCH_INDEX_RETENTION_COUNT:3}
   category-boost-cache-ttl-seconds: ${AI_SEARCH_CATEGORY_BOOST_CACHE_TTL_SECONDS:300}
   query-embedding-cache-ttl-seconds: ${AI_SEARCH_QUERY_EMBED_CACHE_TTL_SECONDS:300}
   query-embedding-cache-max-size: ${AI_SEARCH_QUERY_EMBED_CACHE_MAX_SIZE:5000}

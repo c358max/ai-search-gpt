@@ -17,7 +17,6 @@ import com.example.aisearch.service.synonym.SynonymReloadResult;
 import com.example.aisearch.service.synonym.SynonymReloadService;
 import jakarta.validation.constraints.Min;
 import org.springframework.data.domain.Pageable;
-import org.springframework.http.HttpStatus;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -25,7 +24,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 
@@ -61,17 +59,11 @@ public class SearchController {
             @RequestParam(value = "categoryId", required = false) List<Integer> categoryIds,
             @RequestParam(value = "sort", defaultValue = "RELEVANCE_DESC") SearchSortOption sortOption
     ) {
-        ProductSearchRequest request;
-        Pageable pageable;
-        try {
-            SearchPrice searchPrice = (minPrice == null && maxPrice == null)
-                    ? null
-                    : new SearchPrice(minPrice, maxPrice);
-            request = new ProductSearchRequest(query, searchPrice, categoryIds, sortOption);
-            pageable = SearchPagingPolicy.toPageable(page, size);
-        } catch (IllegalArgumentException e) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage(), e);
-        }
+        SearchPrice searchPrice = (minPrice == null && maxPrice == null)
+                ? null
+                : new SearchPrice(minPrice, maxPrice);
+        ProductSearchRequest request = new ProductSearchRequest(query, searchPrice, categoryIds, sortOption);
+        Pageable pageable = SearchPagingPolicy.toPageable(page, size);
 
         SearchPageResult pageResult = productSearchService.searchPage(request, pageable);
         List<Integer> normalizedCategoryIds = categoryIds == null ? List.of() : categoryIds;
@@ -111,22 +103,10 @@ public class SearchController {
     public ReloadSynonymsResponseDto reloadSynonyms(
             @RequestBody(required = false) ReloadSynonymsRequestDto requestDto
     ) {
-        SynonymReloadRequest request;
-        try {
-            request = requestDto == null
-                    ? SynonymReloadRequest.defaultRequest()
-                    : requestDto.toServiceRequest();
-        } catch (IllegalArgumentException e) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage(), e);
-        }
-
-        try {
-            SynonymReloadResult result = synonymReloadService.reload(request);
-            return ReloadSynonymsResponseDto.from(result);
-        } catch (IllegalArgumentException e) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage(), e);
-        } catch (IllegalStateException e) {
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, e.getMessage(), e);
-        }
+        SynonymReloadRequest request = requestDto == null
+                ? SynonymReloadRequest.defaultRequest()
+                : requestDto.toServiceRequest();
+        SynonymReloadResult result = synonymReloadService.reload(request);
+        return ReloadSynonymsResponseDto.from(result);
     }
 }

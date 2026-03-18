@@ -65,6 +65,35 @@ wait_for_alias() {
   exit 1
 }
 
+wait_for_rollout_complete() {
+  local model="$1"
+  local log_file="$2"
+  local waited=0
+
+  while [ "${waited}" -lt "${ALIAS_WAIT_SECONDS}" ]; do
+    if ! kill -0 "$(cat "${PID_DIR}/${model}.pid")" >/dev/null 2>&1; then
+      echo "[ERROR] ${model} process exited before indexing completed"
+      echo "[ERROR] check log: ${log_file}"
+      tail -n 40 "${log_file}" || true
+      exit 1
+    fi
+
+    if grep -q "Index rollout complete" "${log_file}" && \
+       grep -q "Indexing finished in indexing-web mode" "${log_file}"; then
+      echo "[OK] ${model} indexing rollout completed"
+      return 0
+    fi
+
+    sleep 5
+    waited=$((waited + 5))
+  done
+
+  echo "[ERROR] timed out waiting for indexing completion for model ${model}"
+  echo "[ERROR] check log: ${log_file}"
+  tail -n 40 "${log_file}" || true
+  exit 1
+}
+
 for model in "${MODELS[@]}"; do
   log_file="${LOG_DIR}/${model}.indexing-web.log"
   pid_file="${PID_DIR}/${model}.pid"
@@ -76,7 +105,9 @@ for model in "${MODELS[@]}"; do
   echo "[INFO] ${model} pid=$(cat "${pid_file}") log=${log_file}"
   echo "[INFO] waiting for alias ${alias_name}"
   wait_for_alias "${model}" "${alias_name}" "${log_file}"
+  echo "[INFO] waiting for indexing rollout completion for ${model}"
+  wait_for_rollout_complete "${model}" "${log_file}"
 done
 
 echo "[OK] all model indexing-web processes started (search-vector-only)"
-echo "[NOTE] indexing runs against each model profile and creates model-specific index/alias if missing"
+echo "[NOTE] indexing runs against each model profile and waits until alias swap is completed"

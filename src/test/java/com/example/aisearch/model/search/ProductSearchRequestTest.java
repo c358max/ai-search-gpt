@@ -1,5 +1,6 @@
 package com.example.aisearch.model.search;
 
+import com.example.aisearch.support.SearchDebugPrintSupport;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -11,6 +12,7 @@ class ProductSearchRequestTest {
     @Test
     void shouldTrimQueryAndDefaultSortOption() {
         ProductSearchRequest request = new ProductSearchRequest("  간식  ", null, null, null);
+        SearchDebugPrintSupport.printRequest("trimmed-default", request);
 
         assertEquals("간식", request.query());
         assertEquals(SearchSortOption.RELEVANCE_DESC, request.sortOption());

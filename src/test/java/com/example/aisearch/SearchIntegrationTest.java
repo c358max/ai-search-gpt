@@ -1,33 +1,33 @@
 package com.example.aisearch;
-// 통합테스트용
+
 import com.example.aisearch.model.SearchHitResult;
 import com.example.aisearch.model.search.SearchPageResult;
 import com.example.aisearch.model.search.SearchPagingPolicy;
 import com.example.aisearch.model.search.SearchPrice;
 import com.example.aisearch.model.search.ProductSearchRequest;
 import com.example.aisearch.model.search.SearchSortOption;
-import com.example.aisearch.service.indexing.orchestration.IndexRolloutResult;
 import com.example.aisearch.service.indexing.orchestration.IndexRolloutService;
 import com.example.aisearch.service.search.ProductSearchService;
-import com.example.aisearch.support.RequiresElasticsearch;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.MethodOrderer;
-import org.junit.jupiter.api.Order;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestMethodOrder;
+import org.junit.jupiter.api.TestInstance;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-@SpringBootTest
-@RequiresElasticsearch
-@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
-class SearchIntegrationTest extends TruststoreTestBase {
+@SpringBootTest(properties = {
+        "ai-search.index-name=search-it-products",
+        "ai-search.read-alias=search-it-products-read",
+        "ai-search.synonyms-set=search-it-synonyms"
+})
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
+class SearchIntegrationTest extends ElasticsearchIntegrationTestBase {
 
     @Autowired
     private IndexRolloutService indexRolloutService;
@@ -35,10 +35,11 @@ class SearchIntegrationTest extends TruststoreTestBase {
     @Autowired
     private ProductSearchService productSearchService;
 
-    @Test
-    @Order(1)
-    void reindexSampleData() {
-        IndexRolloutResult rollout = indexRolloutService.rollOutFromSourceData();
+    @BeforeAll
+    void setUp() throws Exception {
+        printIsolationConfig("SearchIntegrationTest");
+        deleteAllVersionedIndices();
+        var rollout = indexRolloutService.rollOutFromSourceData();
         long indexed = rollout.indexedCount();
         Assertions.assertTrue(indexed >= 100, "최소 100건 이상 인덱싱되어야 합니다.");
         System.out.println("[INDEXED] oldIndex=" + rollout.oldIndex()
@@ -46,8 +47,12 @@ class SearchIntegrationTest extends TruststoreTestBase {
                 + ", total=" + indexed);
     }
 
+    @AfterAll
+    void tearDown() throws Exception {
+        deleteAllVersionedIndices();
+    }
+
     @Test
-    @Order(2)
     void semanticSearchShouldReturnRelevantProducts() {
         // 아이 간식 관련 쿼리 테스트
         String query = "어린이가 먹기 좋은 건강한 간식";
@@ -57,7 +62,6 @@ class SearchIntegrationTest extends TruststoreTestBase {
     }
 
     @Test
-    @Order(3)
     void semanticSearchShouldReturnRelevantProducts2() {
         // 수산물 관련 쿼리 테스트
         String query = "생새우 해산물";
@@ -65,7 +69,6 @@ class SearchIntegrationTest extends TruststoreTestBase {
     }
 
     @Test
-    @Order(4)
     void semanticSearchShouldReturnEmptyWhenBelowThreshold() {
         // 관련성이 낮은 키워드는 결과가 비어야 함
         String query = "태풍";
@@ -85,7 +88,6 @@ class SearchIntegrationTest extends TruststoreTestBase {
     }
 
     @Test
-    @Order(5)
     void semanticSearchFiveQueriesTop5() {
         // 모델 비교용 5개 쿼리 결과를 출력
         String[] queries = {
@@ -112,7 +114,6 @@ class SearchIntegrationTest extends TruststoreTestBase {
     }
 
     @Test
-    @Order(6)
     void categoryFilterShouldReturnOnlyRequestedCategories() {
         ProductSearchRequest request = new ProductSearchRequest(null, null, List.of(1, 2, 3), null);
         List<SearchHitResult> results = productSearchService.searchPage(request, pageRequest(1, 10)).results();
@@ -134,7 +135,6 @@ class SearchIntegrationTest extends TruststoreTestBase {
     }
 
     @Test
-    @Order(7)
     void priceRangeFilterShouldReturnOnlyInRange() {
         SearchPrice price = new SearchPrice(5000, 15000);
         ProductSearchRequest request = new ProductSearchRequest(null, price, null, null);
@@ -157,7 +157,6 @@ class SearchIntegrationTest extends TruststoreTestBase {
     }
 
     @Test
-    @Order(8)
     void keywordCategoryAndPriceFilterShouldReturnMatchingResults() {
         ProductSearchRequest request = new ProductSearchRequest(
                 "건강한 간식",
@@ -190,7 +189,6 @@ class SearchIntegrationTest extends TruststoreTestBase {
     }
 
     @Test
-    @Order(9)
     void priceAscSortShouldOrderByPrice() {
         ProductSearchRequest request = new ProductSearchRequest(
                 "간식",
@@ -206,7 +204,6 @@ class SearchIntegrationTest extends TruststoreTestBase {
     }
 
     @Test
-    @Order(10)
     void priceDescSortShouldOrderByPrice() {
         ProductSearchRequest request = new ProductSearchRequest(
                 "간식",
@@ -222,7 +219,6 @@ class SearchIntegrationTest extends TruststoreTestBase {
     }
 
     @Test
-    @Order(11)
     void defaultSortShouldMatchExplicitRelevanceSort() {
         ProductSearchRequest defaultSortRequest = new ProductSearchRequest(
                 "건강한 간식",
@@ -247,7 +243,6 @@ class SearchIntegrationTest extends TruststoreTestBase {
     }
 
     @Test
-    @Order(12)
     void pageAndSizeShouldReturnStableSlicesInEngineSort() {
         ProductSearchRequest page1Request = new ProductSearchRequest(
                 "간식",
@@ -281,7 +276,6 @@ class SearchIntegrationTest extends TruststoreTestBase {
     }
 
     @Test
-    @Order(13)
     void koreanParticleQueryShouldStillReturnRelevantCategory() {
         ProductSearchRequest request = new ProductSearchRequest("어린이가 먹을 간식을 추천해줘", null, null, SearchSortOption.RELEVANCE_DESC);
         SearchPageResult pageResult = productSearchService.searchPage(request, pageRequest(1, 5));
