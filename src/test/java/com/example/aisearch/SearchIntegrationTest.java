@@ -8,9 +8,11 @@ import com.example.aisearch.model.search.ProductSearchRequest;
 import com.example.aisearch.model.search.SearchSortOption;
 import com.example.aisearch.service.indexing.orchestration.IndexRolloutService;
 import com.example.aisearch.service.search.ProductSearchService;
+import com.example.aisearch.support.RequiresElasticsearch;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,8 +28,12 @@ import java.util.stream.Collectors;
         "ai-search.read-alias=search-it-products-read",
         "ai-search.synonyms-set=search-it-synonyms"
 })
+@RequiresElasticsearch
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class SearchIntegrationTest extends ElasticsearchIntegrationTestBase {
+
+    private static final List<Integer> TEST_CATEGORY_IDS = List.of(5675, 5711, 5721);
+    private static final int APPLE_TEST_CATEGORY_ID = 5711;
 
     @Autowired
     private IndexRolloutService indexRolloutService;
@@ -53,6 +59,7 @@ class SearchIntegrationTest extends ElasticsearchIntegrationTestBase {
     }
 
     @Test
+    @DisplayName("어린이 건강 간식 검색은 간식 카테고리의 관련 상품을 반환한다")
     void semanticSearchShouldReturnRelevantProducts() {
         // 아이 간식 관련 쿼리 테스트
         String query = "어린이가 먹기 좋은 건강한 간식";
@@ -62,6 +69,7 @@ class SearchIntegrationTest extends ElasticsearchIntegrationTestBase {
     }
 
     @Test
+    @DisplayName("생새우 해산물 검색은 관련 결과를 반환한다")
     void semanticSearchShouldReturnRelevantProducts2() {
         // 수산물 관련 쿼리 테스트
         String query = "생새우 해산물";
@@ -69,6 +77,7 @@ class SearchIntegrationTest extends ElasticsearchIntegrationTestBase {
     }
 
     @Test
+    @DisplayName("임계값 이하의 낮은 관련도 검색어는 빈 결과를 반환한다")
     void semanticSearchShouldReturnEmptyWhenBelowThreshold() {
         // 관련성이 낮은 키워드는 결과가 비어야 함
         String query = "태풍";
@@ -88,6 +97,7 @@ class SearchIntegrationTest extends ElasticsearchIntegrationTestBase {
     }
 
     @Test
+    @DisplayName("대표 검색어 5개에 대한 상위 5개 결과를 출력한다")
     void semanticSearchFiveQueriesTop5() {
         // 모델 비교용 5개 쿼리 결과를 출력
         String[] queries = {
@@ -114,11 +124,12 @@ class SearchIntegrationTest extends ElasticsearchIntegrationTestBase {
     }
 
     @Test
+    @DisplayName("카테고리 필터를 적용하면 요청한 카테고리만 반환한다")
     void categoryFilterShouldReturnOnlyRequestedCategories() {
-        ProductSearchRequest request = new ProductSearchRequest(null, null, List.of(1, 2, 3), null);
+        ProductSearchRequest request = new ProductSearchRequest(null, null, TEST_CATEGORY_IDS, null);
         List<SearchHitResult> results = productSearchService.searchPage(request, pageRequest(1, 10)).results();
 
-        System.out.println("[CATEGORY_FILTER] categories=1,2,3");
+        System.out.println("[CATEGORY_FILTER] categories=" + TEST_CATEGORY_IDS);
         results.forEach(hit -> System.out.printf(
                 "id=%s, name=%s, categoryId=%s, price=%s%n",
                 hit.id(),
@@ -129,12 +140,13 @@ class SearchIntegrationTest extends ElasticsearchIntegrationTestBase {
 
         Assertions.assertFalse(results.isEmpty(), "카테고리 필터 결과는 비어있으면 안 됩니다.");
         Assertions.assertTrue(results.stream().allMatch(hit -> {
-            Integer categoryId = asInteger(hit.source(), "lev3_category_id");
-            return categoryId != null && List.of(1, 2, 3).contains(categoryId);
-        }), "모든 결과의 lev3_category_id는 1,2,3 중 하나여야 합니다.");
+            Integer categoryId = SearchResultTestSupport.asCategoryInteger(hit.source());
+            return categoryId != null && TEST_CATEGORY_IDS.contains(categoryId);
+        }), "모든 결과의 primary_lev3_category_id는 테스트 카테고리 중 하나여야 합니다.");
     }
 
     @Test
+    @DisplayName("가격 범위 필터를 적용하면 범위 안의 상품만 반환한다")
     void priceRangeFilterShouldReturnOnlyInRange() {
         SearchPrice price = new SearchPrice(5000, 15000);
         ProductSearchRequest request = new ProductSearchRequest(null, price, null, null);
@@ -157,16 +169,17 @@ class SearchIntegrationTest extends ElasticsearchIntegrationTestBase {
     }
 
     @Test
+    @DisplayName("검색어와 카테고리와 가격 조건을 함께 적용하면 모두 만족하는 결과만 반환한다")
     void keywordCategoryAndPriceFilterShouldReturnMatchingResults() {
         ProductSearchRequest request = new ProductSearchRequest(
-                "건강한 간식",
+                "사과",
                 new SearchPrice(5000, 30000),
-                List.of(1),
+                List.of(APPLE_TEST_CATEGORY_ID),
                 SearchSortOption.RELEVANCE_DESC
         );
         List<SearchHitResult> results = productSearchService.searchPage(request, pageRequest(1, 10)).results();
 
-        System.out.println("[COMBINED_FILTER] query=건강한 간식, category=1, min=5000, max=30000");
+        System.out.println("[COMBINED_FILTER] query=사과, category=" + APPLE_TEST_CATEGORY_ID + ", min=5000, max=30000");
         results.forEach(hit -> System.out.printf(
                 "id=%s, score=%s, name=%s, categoryId=%s, price=%s%n",
                 hit.id(),
@@ -178,10 +191,10 @@ class SearchIntegrationTest extends ElasticsearchIntegrationTestBase {
 
         Assertions.assertFalse(results.isEmpty(), "복합 조건 결과는 비어있으면 안 됩니다.");
         Assertions.assertTrue(results.stream().allMatch(hit -> {
-            Integer categoryId = asInteger(hit.source(), "lev3_category_id");
-            Integer priceValue = asInteger(hit.source(), "sale_price");
+            Integer categoryId = SearchResultTestSupport.asCategoryInteger(hit.source());
+            Integer priceValue = SearchResultTestSupport.asInteger(hit.source(), "sale_price");
             return categoryId != null
-                    && categoryId == 1
+                    && categoryId == APPLE_TEST_CATEGORY_ID
                     && priceValue != null
                     && priceValue >= 5000
                     && priceValue <= 30000;
@@ -189,11 +202,12 @@ class SearchIntegrationTest extends ElasticsearchIntegrationTestBase {
     }
 
     @Test
+    @DisplayName("가격 오름차순 정렬은 결과를 낮은 가격부터 반환한다")
     void priceAscSortShouldOrderByPrice() {
         ProductSearchRequest request = new ProductSearchRequest(
                 "간식",
                 new SearchPrice(0, 30000),
-                List.of(1, 2, 3),
+                TEST_CATEGORY_IDS,
                 SearchSortOption.PRICE_ASC
         );
 
@@ -204,11 +218,12 @@ class SearchIntegrationTest extends ElasticsearchIntegrationTestBase {
     }
 
     @Test
+    @DisplayName("가격 내림차순 정렬은 결과를 높은 가격부터 반환한다")
     void priceDescSortShouldOrderByPrice() {
         ProductSearchRequest request = new ProductSearchRequest(
                 "간식",
                 new SearchPrice(0, 30000),
-                List.of(1, 2, 3),
+                TEST_CATEGORY_IDS,
                 SearchSortOption.PRICE_DESC
         );
 
@@ -219,17 +234,18 @@ class SearchIntegrationTest extends ElasticsearchIntegrationTestBase {
     }
 
     @Test
+    @DisplayName("정렬 옵션을 생략하면 명시적 연관도순 정렬과 같은 결과를 반환한다")
     void defaultSortShouldMatchExplicitRelevanceSort() {
         ProductSearchRequest defaultSortRequest = new ProductSearchRequest(
                 "건강한 간식",
                 new SearchPrice(0, 30000),
-                List.of(1, 2, 3),
+                TEST_CATEGORY_IDS,
                 null
         );
         ProductSearchRequest explicitRelevanceRequest = new ProductSearchRequest(
                 "건강한 간식",
                 new SearchPrice(0, 30000),
-                List.of(1, 2, 3),
+                TEST_CATEGORY_IDS,
                 SearchSortOption.RELEVANCE_DESC
         );
 
@@ -243,17 +259,18 @@ class SearchIntegrationTest extends ElasticsearchIntegrationTestBase {
     }
 
     @Test
+    @DisplayName("엔진 정렬에서도 페이지와 사이즈에 따라 안정적인 슬라이스를 반환한다")
     void pageAndSizeShouldReturnStableSlicesInEngineSort() {
         ProductSearchRequest page1Request = new ProductSearchRequest(
-                "간식",
+                null,
                 new SearchPrice(0, 30000),
-                List.of(1, 2, 3),
+                TEST_CATEGORY_IDS,
                 SearchSortOption.PRICE_ASC
         );
         ProductSearchRequest page2Request = new ProductSearchRequest(
-                "간식",
+                null,
                 new SearchPrice(0, 30000),
-                List.of(1, 2, 3),
+                TEST_CATEGORY_IDS,
                 SearchSortOption.PRICE_ASC
         );
 
@@ -267,15 +284,18 @@ class SearchIntegrationTest extends ElasticsearchIntegrationTestBase {
         List<String> page2Ids = page2Results.stream().map(SearchHitResult::id).toList();
         Assertions.assertTrue(page1Ids.stream().noneMatch(page2Ids::contains), "페이지 간 결과 ID는 중복되면 안 됩니다.");
 
-        List<Integer> page1Prices = extractPrices(page1Results);
-        List<Integer> page2Prices = extractPrices(page2Results);
+        List<Integer> page1Prices = SearchResultTestSupport.extractIntegers(page1Results, "sale_price");
+        List<Integer> page2Prices = SearchResultTestSupport.extractIntegers(page2Results, "sale_price");
         assertNonDecreasing(page1Prices);
         assertNonDecreasing(page2Prices);
+        Assertions.assertEquals(page1Results.size(), page1Prices.size(), "1페이지 결과에는 가격 정보가 모두 있어야 합니다.");
+        Assertions.assertEquals(page2Results.size(), page2Prices.size(), "2페이지 결과에는 가격 정보가 모두 있어야 합니다.");
         Assertions.assertTrue(page1Prices.get(page1Prices.size() - 1) <= page2Prices.get(0),
                 "페이지 경계에서도 오름차순이 유지되어야 합니다.");
     }
 
     @Test
+    @DisplayName("조사가 포함된 자연어 검색어도 관련 결과를 반환한다")
     void koreanParticleQueryShouldStillReturnRelevantCategory() {
         ProductSearchRequest request = new ProductSearchRequest("어린이가 먹을 간식을 추천해줘", null, null, SearchSortOption.RELEVANCE_DESC);
         SearchPageResult pageResult = productSearchService.searchPage(request, pageRequest(1, 5));

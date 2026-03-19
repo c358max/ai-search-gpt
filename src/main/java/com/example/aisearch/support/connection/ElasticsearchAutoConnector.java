@@ -45,9 +45,10 @@ public class ElasticsearchAutoConnector {
      * </ol>
      */
     public ConnectionInfo getConnectionInfo(AiSearchProperties properties, AiSearchK8sProperties k8sProperties) {
-        URI uri = URI.create(properties.elasticsearchUrl());
-        String username = properties.username();
-        String password = properties.password();
+        String url = defaultIfBlank(properties.elasticsearchUrl(), "http://localhost:9200");
+        URI uri = URI.create(url);
+        String username = defaultIfBlank(properties.username(), "elastic");
+        String password = defaultIfBlank(properties.password(), "password");
 
         if (!shouldAutoForward(k8sProperties, uri)) {
             return new ConnectionInfo(uri.toString(), username, password);
@@ -98,6 +99,13 @@ public class ElasticsearchAutoConnector {
 
     private boolean needsPassword(String password) {
         return password == null || password.isBlank() || "password".equals(password);
+    }
+
+    private String defaultIfBlank(String value, String defaultValue) {
+        if (value == null || value.isBlank()) {
+            return defaultValue;
+        }
+        return value;
     }
 
     private String buildLocalUrl(URI baseUri, int localPort) {

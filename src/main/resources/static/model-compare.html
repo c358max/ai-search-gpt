@@ -139,6 +139,12 @@
             gap: 16px;
         }
 
+        .page-actions {
+            display: flex;
+            justify-content: flex-end;
+            margin-bottom: 14px;
+        }
+
         .column {
             min-height: 420px;
             padding: 18px;
@@ -148,30 +154,61 @@
             box-shadow: var(--shadow);
         }
 
-        .column h2 {
-            margin: 0;
-            font-size: 20px;
-        }
-
         .column-head {
             display: grid;
             gap: 8px;
             margin-bottom: 12px;
         }
 
+        .title-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .title-row h2 {
+            margin: 0;
+            font-size: 22px;
+            line-height: 1.1;
+        }
+
         .model-meta {
             display: flex;
             flex-wrap: wrap;
             gap: 8px;
+            justify-content: flex-end;
         }
 
         .model-chip {
-            padding: 5px 9px;
-            border-radius: 999px;
-            background: #eef3ef;
-            color: var(--muted);
-            font-size: 12px;
+            display: inline-flex;
+            align-items: baseline;
+            gap: 6px;
+            padding: 8px 11px;
+            border-radius: 14px;
+            background: linear-gradient(180deg, #f1f8f3 0%, #e5f0e9 100%);
+            color: var(--ink);
+            font-size: 13px;
             font-weight: 700;
+            border: 1px solid #d3e3d8;
+        }
+
+        .model-chip .chip-label {
+            color: var(--muted);
+            font-size: 11px;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+
+        .model-chip .chip-value {
+            font-size: 16px;
+            font-weight: 800;
+            color: var(--accent);
+        }
+
+        .model-chip.memory .chip-value {
+            font-size: 14px;
+            color: #1d4f3b;
         }
 
         .endpoint {
@@ -193,6 +230,39 @@
         .status.error {
             background: #fbe7e7;
             color: var(--warn);
+        }
+
+        .feedback-box {
+            display: grid;
+            gap: 10px;
+            margin-bottom: 14px;
+            padding: 12px;
+            border: 1px solid var(--line);
+            border-radius: 14px;
+            background: #f8f5ee;
+        }
+
+        .feedback-row {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr);
+            gap: 8px;
+        }
+
+        .feedback-row select,
+        .page-actions button {
+            padding: 10px 12px;
+            border-radius: 12px;
+        }
+
+        .feedback-summary {
+            color: var(--muted);
+            font-size: 12px;
+            line-height: 1.5;
+        }
+
+        .feedback-summary strong {
+            color: var(--ink);
+            font-size: 13px;
         }
 
         .result-list {
@@ -236,6 +306,32 @@
             line-height: 1.4;
         }
 
+        .result .score-panel {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 12px;
+            margin: 0 0 10px;
+            padding: 10px 12px;
+            border-radius: 14px;
+            background: linear-gradient(180deg, #edf7f1 0%, #e2f1e8 100%);
+            border: 1px solid #cfe3d6;
+        }
+
+        .result .score-label {
+            color: var(--accent);
+            font-size: 12px;
+            font-weight: 800;
+            letter-spacing: 0.04em;
+        }
+
+        .result .score-value {
+            color: var(--accent);
+            font-size: 24px;
+            font-weight: 900;
+            line-height: 1;
+        }
+
         .result dl {
             margin: 0;
             display: grid;
@@ -272,6 +368,15 @@
             .grid {
                 grid-template-columns: 1fr;
             }
+
+            .title-row {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .model-meta {
+                justify-content: flex-start;
+            }
         }
     </style>
 </head>
@@ -301,7 +406,6 @@
                 <option value="DISCOUNT_RATE_DESC">할인율높은순</option>
                 <option value="REVIEW_COUNT_DESC">리뷰많은순</option>
                 <option value="RATING_DESC">별점높은순</option>
-                <option value="CATEGORY_BOOSTING_DESC">카테고리 부스팅</option>
             </select>
             <button id="searchButton" type="button">모델 비교</button>
         </div>
@@ -313,6 +417,10 @@
             <span>예: `./sh_bin/31_start_all_model_indexing_web.sh`</span>
         </div>
     </section>
+
+    <div class="page-actions">
+        <button type="button" class="secondary" id="applyAllRatingsButton">평가 한 번에 적용</button>
+    </div>
 
     <section class="grid" id="resultsGrid"></section>
 </main>
@@ -326,11 +434,20 @@
     ];
 
     const presetQueries = [
-        "어린이 간식",
-        "건강한 간식",
-        "생새우",
-        "단백질 많은 간편식",
-        "채식 위주의 건강식"
+        "콩나물",
+        "핫도그",
+        "두유",
+        "낫또",
+        "아임리얼",
+        "생수",
+        "우유",
+        "요거트",
+        "김",
+        "나또",
+        "김치",
+        "계란",
+        "만두",
+        "두부"
     ];
 
     const queryInput = document.getElementById("query");
@@ -341,6 +458,7 @@
     const resultsGrid = document.getElementById("resultsGrid");
     const hostInfo = document.getElementById("hostInfo");
     const queryPreview = document.getElementById("queryPreview");
+    const applyAllRatingsButton = document.getElementById("applyAllRatingsButton");
 
     hostInfo.textContent = `현재 기준 호스트: ${host}`;
 
@@ -356,6 +474,8 @@
         presetList.appendChild(button);
     });
 
+    applyAllRatingsButton.addEventListener("click", saveAllFeedback);
+
     function renderInitialColumns() {
         resultsGrid.innerHTML = "";
         models.forEach((model) => {
@@ -364,12 +484,32 @@
             column.id = `column-${model.key}`;
             column.innerHTML = `
                 <div class="column-head">
-                    <h2>${model.label}</h2>
-                    <div class="model-meta">
-                        <span class="model-chip">차원수: 확인 중</span>
-                        <span class="model-chip">메모리: 확인 중</span>
+                    <div class="title-row">
+                        <h2>${model.label}</h2>
+                        <div class="model-meta">
+                            <span class="model-chip dimension">
+                                <span class="chip-label">차원수</span>
+                                <span class="chip-value" data-role="dimensions">확인 중</span>
+                            </span>
+                            <span class="model-chip memory">
+                                <span class="chip-label">메모리</span>
+                                <span class="chip-value" data-role="memory">확인 중</span>
+                            </span>
+                        </div>
                     </div>
                     <div class="endpoint">http://${host}:${model.port}/api/search</div>
+                </div>
+                <div class="feedback-box">
+                    <div class="feedback-row">
+                        <select data-role="rating-select">
+                            <option value="5">5점</option>
+                            <option value="4">4점</option>
+                            <option value="3" selected>3점</option>
+                            <option value="2">2점</option>
+                            <option value="1">1점</option>
+                        </select>
+                    </div>
+                    <div class="feedback-summary" data-role="feedback-summary">전체 평가 전</div>
                 </div>
                 <div class="status">대기 중</div>
                 <div class="empty">검색어를 입력하고 모델 비교를 실행하세요.</div>
@@ -416,13 +556,143 @@
 
     function renderModelInfo(model, payload) {
         const column = document.getElementById(`column-${model.key}`);
-        const chips = column.querySelectorAll(".model-chip");
-        if (chips.length < 2) {
+        const dimensionsNode = column.querySelector('[data-role="dimensions"]');
+        const memoryNode = column.querySelector('[data-role="memory"]');
+        if (!dimensionsNode || !memoryNode) {
             return;
         }
 
-        chips[0].textContent = `차원수: ${payload.dimensions ?? "-"}`;
-        chips[1].textContent = `메모리: ${formatBytes(payload.heapUsedBytes)} / ${formatBytes(payload.heapMaxBytes)}`;
+        dimensionsNode.textContent = `${payload.dimensions ?? "-"}`;
+        memoryNode.textContent = `${formatBytes(payload.heapUsedBytes)} / ${formatBytes(payload.heapMaxBytes)}`;
+    }
+
+    function formatDisplayValue(value) {
+        if (Array.isArray(value)) {
+            const flattened = value
+                .flatMap((entry) => Array.isArray(entry) ? entry : [entry])
+                .filter((entry) => entry !== null && entry !== undefined && `${entry}`.trim() !== "");
+            return flattened.length > 0 ? flattened.join(", ") : "-";
+        }
+
+        if (value === null || value === undefined) {
+            return "-";
+        }
+
+        const text = `${value}`.trim();
+        return text !== "" ? text : "-";
+    }
+
+    function formatCategoryPath(source) {
+        return formatDisplayValue(
+            source.lev3_category_id_name
+            ?? source.lev2_category_id_name
+            ?? source.category
+            ?? source.category_name
+        );
+    }
+
+    function updateFeedbackSummary(model, overallAverageScore, overallRatingCount, queryAverageScore, queryRatingCount, savedScore) {
+        const column = document.getElementById(`column-${model.key}`);
+        const summaryNode = column.querySelector('[data-role="feedback-summary"]');
+        if (!summaryNode) {
+            return;
+        }
+
+        if (!overallRatingCount) {
+            summaryNode.textContent = "전체 평가 전";
+            return;
+        }
+
+        const savedText = savedScore ? ` · 방금 ${savedScore}점 저장` : "";
+        const querySummary = queryRatingCount
+            ? `<br>현재 검색어 평균 ${Number(queryAverageScore).toFixed(2)} / 5 · ${queryRatingCount}건`
+            : "";
+        summaryNode.innerHTML = `<strong>전체 평균 ${Number(overallAverageScore).toFixed(2)} / 5 · ${overallRatingCount}건</strong>${querySummary}${savedText}`;
+    }
+
+    async function loadFeedbackSummary(model, query) {
+        try {
+            const overallResponse = await fetch(`http://${host}:${model.port}/api/model-feedback/summary`);
+            if (!overallResponse.ok) {
+                throw new Error(`status=${overallResponse.status}`);
+            }
+            const overallPayload = await overallResponse.json();
+
+            let queryAverageScore = 0;
+            let queryRatingCount = 0;
+            if (query) {
+                const queryUrl = new URL(`http://${host}:${model.port}/api/model-feedback`);
+                queryUrl.searchParams.set("q", query);
+                const queryResponse = await fetch(queryUrl.toString());
+                if (queryResponse.ok) {
+                    const queryPayload = await queryResponse.json();
+                    queryAverageScore = Number(queryPayload.averageScore ?? 0);
+                    queryRatingCount = Number(queryPayload.ratingCount ?? 0);
+                }
+            }
+
+            updateFeedbackSummary(
+                model,
+                Number(overallPayload.averageScore ?? 0),
+                Number(overallPayload.ratingCount ?? 0),
+                queryAverageScore,
+                queryRatingCount,
+                0
+            );
+        } catch (error) {
+            const column = document.getElementById(`column-${model.key}`);
+            const summaryNode = column.querySelector('[data-role="feedback-summary"]');
+            if (summaryNode) {
+                summaryNode.textContent = "평균 점수 조회 실패";
+            }
+        }
+    }
+
+    async function saveFeedback(model) {
+        const query = queryInput.value.trim();
+        if (!query) {
+            alert("평가 저장 전에 검색어를 먼저 입력하세요.");
+            return;
+        }
+
+        const column = document.getElementById(`column-${model.key}`);
+        const selectNode = column.querySelector('[data-role="rating-select"]');
+        const summaryNode = column.querySelector('[data-role="feedback-summary"]');
+        const score = Number(selectNode?.value ?? 0);
+
+        try {
+            const response = await fetch(`http://${host}:${model.port}/api/model-feedback`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({ query, score })
+            });
+            const payload = await response.json();
+            if (!response.ok) {
+                throw new Error(payload.message ?? `status=${response.status}`);
+            }
+            await loadFeedbackSummary(model, query);
+            const column = document.getElementById(`column-${model.key}`);
+            const summaryNode = column.querySelector('[data-role="feedback-summary"]');
+            if (summaryNode) {
+                summaryNode.innerHTML = `${summaryNode.innerHTML} · 방금 ${payload.savedScore}점 저장`;
+            }
+        } catch (error) {
+            if (summaryNode) {
+                summaryNode.textContent = `평가 저장 실패: ${error.message}`;
+            }
+        }
+    }
+
+    async function saveAllFeedback() {
+        const query = queryInput.value.trim();
+        if (!query) {
+            alert("평가 저장 전에 검색어를 먼저 입력하세요.");
+            return;
+        }
+
+        await Promise.all(models.map((model) => saveFeedback(model)));
     }
 
     function renderSuccess(model, payload) {
@@ -448,23 +718,18 @@
             results.forEach((item, index) => {
                 const source = item.source || {};
                 const name = source.goods_name ?? source.product_name ?? source.name ?? "(상품명 없음)";
-                const categoryName = source.lev3_category_id_name
-                    ?? source.category
-                    ?? source.category_name
-                    ?? "-";
-                const price = source.sale_price
-                    ?? source.price
-                    ?? source.recommended_price
-                    ?? "-";
+                const categoryName = formatCategoryPath(source);
                 const card = document.createElement("article");
                 card.className = "result";
                 card.innerHTML = `
                     <span class="rank">${index + 1}위</span>
                     <p class="name">${name}</p>
+                    <div class="score-panel">
+                        <span class="score-label">AI 유사도 점수</span>
+                        <span class="score-value">${item.score ?? "-"}</span>
+                    </div>
                     <dl>
-                        <div><span>카테고리</span><span>${categoryName}</span></div>
-                        <div><span>가격</span><span>${price}</span></div>
-                        <div><span>점수</span><span>${item.score ?? "-"}</span></div>
+                        <div><span>카테고리명</span><span>${categoryName}</span></div>
                     </dl>
                 `;
                 list.appendChild(card);
@@ -472,6 +737,7 @@
         }
 
         column.appendChild(list);
+        loadFeedbackSummary(model, payload.query ?? queryInput.value.trim());
     }
 
     function renderError(model, errorMessage) {

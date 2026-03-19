@@ -1,6 +1,7 @@
 package com.example.aisearch.service.embedding;
 
 import com.example.aisearch.config.AiSearchProperties;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -17,6 +18,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 class QueryEmbeddingServiceTest {
 
     @Test
+    @DisplayName("정규화된 동일 검색어는 캐시된 임베딩을 재사용한다")
     void shouldReuseCachedEmbeddingForNormalizedQuery() {
         CountingEmbeddingService embeddingService = new CountingEmbeddingService(0L);
         QueryEmbeddingService queryEmbeddingService = new QueryEmbeddingService(
@@ -36,6 +38,7 @@ class QueryEmbeddingServiceTest {
     }
 
     @Test
+    @DisplayName("동시에 들어온 동일 검색어 임베딩 요청은 한 번만 계산한다")
     void shouldDeduplicateConcurrentEmbeddingRequests() throws Exception {
         CountingEmbeddingService embeddingService = new CountingEmbeddingService(200L);
         QueryEmbeddingService queryEmbeddingService = new QueryEmbeddingService(
@@ -68,6 +71,27 @@ class QueryEmbeddingServiceTest {
     }
 
     @Test
+    @DisplayName("즉시 완료되는 임베딩도 재귀 맵 갱신 없이 처리한다")
+    void shouldAllowImmediateCompletionWithoutRecursiveMapMutation() {
+        CountingEmbeddingService embeddingService = new CountingEmbeddingService(0L);
+        QueryEmbeddingService queryEmbeddingService = new QueryEmbeddingService(
+                embeddingService,
+                new EmbeddingInputFormatter(testProperties(1000L, 100L)),
+                testProperties(1000L, 100L)
+        );
+        try {
+            List<Float> first = queryEmbeddingService.toQueryEmbedding("사과");
+            List<Float> second = queryEmbeddingService.toQueryEmbedding("사과");
+
+            assertSame(first, second);
+            assertEquals(1, embeddingService.invocationCount());
+        } finally {
+            queryEmbeddingService.close();
+        }
+    }
+
+    @Test
+    @DisplayName("임베딩 생성이 제한 시간을 넘기면 예외를 던진다")
     void shouldThrowWhenEmbeddingGenerationTimesOut() {
         CountingEmbeddingService embeddingService = new CountingEmbeddingService(200L);
         QueryEmbeddingService queryEmbeddingService = new QueryEmbeddingService(

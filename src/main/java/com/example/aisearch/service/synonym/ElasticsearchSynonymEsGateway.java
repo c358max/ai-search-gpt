@@ -28,12 +28,12 @@ public class ElasticsearchSynonymEsGateway implements SynonymEsGateway {
             if (isNotFound(e)) {
                 return false;
             }
-            throw new IllegalStateException("동의어 세트 조회 실패: " + synonymsSetId, e);
+            throw new IllegalStateException("동의어 세트 조회 실패: " + synonymsSetId + " | " + summarize(e), e);
         } catch (IOException | ElasticsearchException e) {
             if (isNotFound(e)) {
                 return false;
             }
-            throw new IllegalStateException("동의어 세트 조회 실패: " + synonymsSetId, e);
+            throw new IllegalStateException("동의어 세트 조회 실패: " + synonymsSetId + " | " + summarize(e), e);
         }
     }
 
@@ -48,9 +48,9 @@ public class ElasticsearchSynonymEsGateway implements SynonymEsGateway {
             if (isKnownPutSynonymDecodeIssue(e)) {
                 return;
             }
-            throw new IllegalStateException("동의어 세트 반영 실패: " + synonymsSetId, e);
+            throw new IllegalStateException("동의어 세트 반영 실패: " + synonymsSetId + " | " + summarize(e), e);
         } catch (IOException | ElasticsearchException e) {
-            throw new IllegalStateException("동의어 세트 반영 실패: " + synonymsSetId, e);
+            throw new IllegalStateException("동의어 세트 반영 실패: " + synonymsSetId + " | " + summarize(e), e);
         }
     }
 
@@ -115,5 +115,17 @@ public class ElasticsearchSynonymEsGateway implements SynonymEsGateway {
             current = current.getCause();
         }
         return false;
+    }
+
+    private String summarize(Exception e) {
+        Throwable current = e;
+        while (current.getCause() != null) {
+            current = current.getCause();
+        }
+        String message = current.getMessage();
+        if (message == null || message.isBlank()) {
+            message = e.getMessage();
+        }
+        return current.getClass().getSimpleName() + ": " + message;
     }
 }

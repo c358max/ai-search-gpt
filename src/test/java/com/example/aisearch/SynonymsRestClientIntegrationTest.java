@@ -2,9 +2,11 @@ package com.example.aisearch;
 
 import com.example.aisearch.service.indexing.orchestration.IndexRolloutService;
 import com.example.aisearch.service.synonym.SynonymReloadMode;
+import com.example.aisearch.support.RequiresElasticsearch;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,8 +28,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
                 "ai-search.synonyms-set=synonym-rest-it-synonyms"
         }
 )
+@RequiresElasticsearch
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class SynonymsRestClientIntegrationTest extends RestApiIntegrationTestBase {
+
+    private static final int SYNONYM_ASSERT_PAGE_SIZE = 100;
 
     @LocalServerPort
     private int port;
@@ -53,12 +58,14 @@ class SynonymsRestClientIntegrationTest extends RestApiIntegrationTestBase {
     }
 
     @Test
+    @DisplayName("회귀 동의어를 적용한 뒤 '딤섬'을 검색하면 만두 상품이 포함된다")
     void 회귀동의어_적용후_딤섬_검색시_만두가_포함된다() throws Exception {
         reloadSynonymsAndAssert(SynonymReloadMode.REGRESSION);
         assertSynonymSearchContainsProduct("딤섬", "만두");
     }
 
     @Test
+    @DisplayName("운영 동의어를 적용한 뒤 '교자'를 검색하면 만두 상품이 포함된다")
     void 동의어_적용후_교자_검색시_만두가_포함된다() throws Exception {
         reloadSynonymsAndAssert(SynonymReloadMode.PRODUCTION);
         assertSynonymSearchContainsProduct("교자", "만두");
@@ -66,6 +73,7 @@ class SynonymsRestClientIntegrationTest extends RestApiIntegrationTestBase {
 
 
     @Test
+    @DisplayName("운영 동의어를 적용한 뒤 '얄피'를 검색하면 만두 상품이 포함된다")
     void 동의어_적용후_얄피_검색시_생만두가_포함된다() throws Exception {
         reloadSynonymsAndAssert(SynonymReloadMode.PRODUCTION);
         assertSynonymSearchContainsProduct("얄피", "만두");
@@ -143,7 +151,7 @@ class SynonymsRestClientIntegrationTest extends RestApiIntegrationTestBase {
             String query,
         String expectedProductNameKeyword
     ) throws Exception {
-        JsonNode searchJson = searchAndAssertOk(query, 20);
+        JsonNode searchJson = searchAndAssertOk(query, SYNONYM_ASSERT_PAGE_SIZE);
         printSearchResults(query, searchJson, expectedProductNameKeyword);
         assertContainsProductName(searchJson.path("results"), expectedProductNameKeyword);
     }

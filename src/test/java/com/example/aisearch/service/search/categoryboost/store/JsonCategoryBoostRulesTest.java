@@ -1,6 +1,7 @@
 package com.example.aisearch.service.search.categoryboost.store;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.io.DefaultResourceLoader;
 
@@ -12,6 +13,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class JsonCategoryBoostRulesTest {
 
     @Test
+    @DisplayName("V1 픽스처에서 카테고리 부스팅 룰을 로드한다")
     void shouldLoadRulesFromFixtureV1() {
         JsonCategoryBoostRules rules = new JsonCategoryBoostRules(
                 new DefaultResourceLoader(),
@@ -26,6 +28,7 @@ class JsonCategoryBoostRulesTest {
     }
 
     @Test
+    @DisplayName("룰 파일 경로를 바꾸고 다시 로드하면 새 버전을 반영한다")
     void shouldReloadRulesWhenVersionChangesByPathSwitching() {
         JsonCategoryBoostRules rules = new JsonCategoryBoostRules(
                 new DefaultResourceLoader(),
@@ -43,6 +46,7 @@ class JsonCategoryBoostRulesTest {
     }
 
     @Test
+    @DisplayName("배열 기반 category boost JSON도 정상적으로 로드한다")
     void shouldLoadRulesFromArrayBasedCategoryBoostJson() {
         JsonCategoryBoostRules rules = new JsonCategoryBoostRules(
                 new DefaultResourceLoader(),

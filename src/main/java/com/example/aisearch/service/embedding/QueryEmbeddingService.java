@@ -75,6 +75,7 @@ public class QueryEmbeddingService {
         try {
             List<Float> embedding = future.get(timeoutMillis, TimeUnit.MILLISECONDS);
             cache.put(cacheKey, embedding);
+            inFlight.remove(cacheKey, future);
             return embedding;
         } catch (TimeoutException e) {
             future.cancel(true);
@@ -85,8 +86,10 @@ public class QueryEmbeddingService {
             );
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+            inFlight.remove(cacheKey, future);
             throw new QueryEmbeddingUnavailableException("검색어 임베딩 생성 대기 중 인터럽트 발생. query=" + cacheKey, e);
         } catch (ExecutionException e) {
+            inFlight.remove(cacheKey, future);
             Throwable cause = unwrap(e.getCause());
             if (cause instanceof QueryEmbeddingUnavailableException unavailable) {
                 throw unavailable;
@@ -97,15 +100,9 @@ public class QueryEmbeddingService {
 
     private CompletableFuture<List<Float>> startEmbedding(String cacheKey) {
         return CompletableFuture.supplyAsync(
-                        () -> embeddingService.toEmbeddingVector(embeddingInputFormatter.formatQuery(cacheKey)),
-                        executor
-                )
-                .whenComplete((result, throwable) -> {
-                    inFlight.remove(cacheKey);
-                    if (throwable == null && result != null) {
-                        cache.put(cacheKey, result);
-                    }
-                });
+                () -> embeddingService.toEmbeddingVector(embeddingInputFormatter.formatQuery(cacheKey)),
+                executor
+        );
     }
 
     private Throwable unwrap(Throwable throwable) {

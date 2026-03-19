@@ -91,7 +91,8 @@ public class VectorOnlySearchStrategy implements SearchStrategy {
             }
             return filterOnlySearch(searchRequest, pageable);
         } catch (IOException e) {
-            throw new IllegalStateException("검색 요청 실패", e);
+            log.error("Search request failed. query={}, alias={}", searchRequest.query(), getReadAlias(), e);
+            throw new IllegalStateException("검색 요청 실패: " + summarizeException(e), e);
         }
     }
 
@@ -176,5 +177,17 @@ public class VectorOnlySearchStrategy implements SearchStrategy {
             throw new IllegalStateException("ai-search.read-alias 값이 비어 있습니다.");
         }
         return readAlias;
+    }
+
+    private String summarizeException(Throwable throwable) {
+        Throwable current = throwable;
+        while (current.getCause() != null && current.getCause() != current) {
+            current = current.getCause();
+        }
+        String message = current.getMessage();
+        if (message == null || message.isBlank()) {
+            return current.getClass().getSimpleName();
+        }
+        return current.getClass().getSimpleName() + ": " + message;
     }
 }

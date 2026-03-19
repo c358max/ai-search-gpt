@@ -1,8 +1,10 @@
 package com.example.aisearch.service.indexing.domain;
 
 import com.example.aisearch.ElasticsearchIntegrationTestBase;
+import com.example.aisearch.support.RequiresElasticsearch;
 import com.example.aisearch.service.indexing.orchestration.IndexRolloutService;
 import com.example.aisearch.service.indexing.orchestration.result.IndexRolloutResult;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -22,6 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
         "ai-search.synonyms-set=retention-it-synonyms",
         "ai-search.index-retention-count=3"
 })
+@RequiresElasticsearch
 class IndexCleanupIntegrationTest extends ElasticsearchIntegrationTestBase {
 
     @Autowired
@@ -42,6 +45,7 @@ class IndexCleanupIntegrationTest extends ElasticsearchIntegrationTestBase {
     }
 
     @Test
+    @DisplayName("롤아웃을 4번 수행하면 최신 3개 인덱스만 남기고 가장 오래된 인덱스를 삭제한다")
     void retentionCleanup은_실제_rollout_4회후_최신3개만_남기고_oldest를_삭제한다() throws Exception {
         IndexRolloutResult first = indexRolloutService.rollOutFromSourceData();
         System.out.println("[ROLLOUT-1] oldIndex=" + first.oldIndex() + ", newIndex=" + first.newIndex() + ", indexedCount=" + first.indexedCount());

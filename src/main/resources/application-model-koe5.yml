@@ -1,6 +1,0 @@
-server:
-  port: ${SERVER_PORT:8095}
-
-ai-search:
-  model-key: koe5
-  model-path-segment: KoE5

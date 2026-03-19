@@ -10,6 +10,8 @@ import java.util.List;
 public class SynonymReloadService {
 
     private static final String SUCCESS_MESSAGE = "synonyms reloaded successfully";
+    private static final int SYNONYMS_RETRY_COUNT = 5;
+    private static final long SYNONYMS_RETRY_DELAY_MILLIS = 1500L;
 
     private final AiSearchProperties properties;
     private final SynonymRuleSource synonymRuleSource;
@@ -50,7 +52,7 @@ public class SynonymReloadService {
 
     public void ensureProductionSynonymsSet() {
         String synonymsSet = resolveRequired(null, properties.synonymsSet(), "synonymsSet");
-        if (synonymEsGateway.existsSynonyms(synonymsSet)) {
+        if (existsSynonymsWithRetry(synonymsSet)) {
             return;
         }
 
@@ -58,7 +60,71 @@ public class SynonymReloadService {
         if (rules.isEmpty()) {
             throw new InvalidSynonymReloadRequestException("운영 동의어 규칙이 비어 있습니다.");
         }
-        synonymEsGateway.putSynonyms(synonymsSet, rules);
+        putSynonymsWithRetry(synonymsSet, rules);
+    }
+
+    private boolean existsSynonymsWithRetry(String synonymsSet) {
+        IllegalStateException lastFailure = null;
+        for (int attempt = 1; attempt <= SYNONYMS_RETRY_COUNT; attempt++) {
+            try {
+                return synonymEsGateway.existsSynonyms(synonymsSet);
+            } catch (IllegalStateException e) {
+                if (!isRetriableSynonymFailure(e) || attempt == SYNONYMS_RETRY_COUNT) {
+                    throw e;
+                }
+                lastFailure = e;
+                sleepBeforeRetry(attempt, "동의어 세트 조회 재시도", synonymsSet);
+            }
+        }
+
+        if (lastFailure != null) {
+            throw lastFailure;
+        }
+        return false;
+    }
+
+    private void putSynonymsWithRetry(String synonymsSet, List<String> rules) {
+        IllegalStateException lastFailure = null;
+        for (int attempt = 1; attempt <= SYNONYMS_RETRY_COUNT; attempt++) {
+            try {
+                synonymEsGateway.putSynonyms(synonymsSet, rules);
+                return;
+            } catch (IllegalStateException e) {
+                if (!isRetriableSynonymFailure(e) || attempt == SYNONYMS_RETRY_COUNT) {
+                    throw e;
+                }
+                lastFailure = e;
+                sleepBeforeRetry(attempt, "동의어 세트 반영 재시도", synonymsSet);
+            }
+        }
+
+        if (lastFailure != null) {
+            throw lastFailure;
+        }
+    }
+
+    private boolean isRetriableSynonymFailure(IllegalStateException e) {
+        String message = e.getMessage();
+        if (message == null || message.isBlank()) {
+            return false;
+        }
+
+        return message.contains("status: 503")
+                || message.contains("[503]")
+                || message.contains("503 Service Unavailable")
+                || message.contains("all shards failed")
+                || message.contains("no_shard_available_action_exception")
+                || message.contains(".synonyms-2");
+    }
+
+    private void sleepBeforeRetry(int attempt, String action, String synonymsSet) {
+        try {
+            Thread.sleep(SYNONYMS_RETRY_DELAY_MILLIS);
+        } catch (InterruptedException interruptedException) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException(action + " 중 인터럽트 발생. attempt=" + attempt + ", synonymsSet=" + synonymsSet,
+                    interruptedException);
+        }
     }
 
     private String resolveRequired(String requestValue, String propertyValue, String fieldName) {

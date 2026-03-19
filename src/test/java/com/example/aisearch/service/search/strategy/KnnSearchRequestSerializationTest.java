@@ -11,6 +11,7 @@ import com.example.aisearch.service.search.query.SearchFilterQueryBuilder;
 import com.example.aisearch.service.search.strategy.request.ElasticsearchSearchRequestBuilder;
 import com.example.aisearch.service.search.strategy.script.PainlessHybridScoreScriptFactory;
 import com.example.aisearch.support.SearchDebugPrintSupport;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -54,6 +55,7 @@ class KnnSearchRequestSerializationTest {
             );
 
     @Test
+    @DisplayName("대표 검색 케이스 두 개의 Elasticsearch 요청 JSON 구조를 직렬화한다")
     void shouldPrintSerializedSearchRequestJsonForTwoRepresentativeCases() throws Exception {
         com.example.aisearch.model.search.ProductSearchRequest appleRequest =
                 new com.example.aisearch.model.search.ProductSearchRequest(

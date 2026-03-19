@@ -3,6 +3,7 @@ package com.example.aisearch.service.search.categoryboost.policy;
 import com.example.aisearch.model.search.ProductSearchRequest;
 import com.example.aisearch.model.search.SearchSortOption;
 import com.example.aisearch.service.search.categoryboost.api.CategoryBoostRules;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
@@ -13,6 +14,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class CategoryBoostingDeciderTest {
 
     @Test
+    @DisplayName("카테고리 부스팅 정렬이 아니면 기존 정렬 옵션을 유지한다")
     void shouldKeepOriginalSortWhenSortOptionIsNotCategoryBoosting() {
         CategoryBoostRules rules = keyword -> Optional.of(Map.of("1", 0.2));
         CategoryBoostingDecider decider = new CategoryBoostingDecider(rules);
@@ -25,6 +27,7 @@ class CategoryBoostingDeciderTest {
     }
 
     @Test
+    @DisplayName("키워드 룰이 일치하면 카테고리 부스팅을 적용한다")
     void shouldApplyBoostWhenKeywordMatches() {
         CategoryBoostRules rules = keyword -> "간식".equals(keyword)
                 ? Optional.of(Map.of("1", 0.2))
@@ -40,6 +43,7 @@ class CategoryBoostingDeciderTest {
     }
 
     @Test
+    @DisplayName("키워드 룰이 없으면 카테고리 부스팅 정렬을 연관도순으로 되돌린다")
     void shouldFallbackToRelevanceWhenKeywordDoesNotMatch() {
         CategoryBoostRules rules = keyword -> Optional.empty();
         CategoryBoostingDecider decider = new CategoryBoostingDecider(rules);

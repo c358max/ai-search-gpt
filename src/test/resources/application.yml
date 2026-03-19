@@ -19,7 +19,7 @@ ai-search:
   category-boost-cache-ttl-seconds: ${AI_SEARCH_CATEGORY_BOOST_CACHE_TTL_SECONDS:300}
   query-embedding-cache-ttl-seconds: ${AI_SEARCH_QUERY_EMBED_CACHE_TTL_SECONDS:300}
   query-embedding-cache-max-size: ${AI_SEARCH_QUERY_EMBED_CACHE_MAX_SIZE:5000}
-  query-embedding-timeout-millis: ${AI_SEARCH_QUERY_EMBED_TIMEOUT_MILLIS:1500}
+  query-embedding-timeout-millis: ${AI_SEARCH_QUERY_EMBED_TIMEOUT_MILLIS:5000}
   query-embedding-executor-threads: ${AI_SEARCH_QUERY_EMBED_THREADS:2}
   k8s:
     auto-port-forward: ${AI_SEARCH_AUTO_PORT_FORWARD:true}

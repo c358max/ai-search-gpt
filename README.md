@@ -5,7 +5,7 @@
 ## 핵심 구성
 - Elasticsearch: ECK로 Kubernetes에 배포
 - 라이선스: Basic(무료)
-- 임베딩: DJL + 비교 후보 모델(`multilingual-e5-small-ko-v2`, `KURE-v1`, `bge-m3`)
+- 임베딩: DJL + 비교 후보 모델(`dragonkue/multilingual-e5-small-ko-v2`, `nlpai-lab/KURE-v1`, `BAAI/bge-m3`)
 - 검색: Elasticsearch `dense_vector` + `knn` 쿼리
 - 데이터: `src/main/resources/data/goods_template.json`
 
@@ -24,8 +24,11 @@
 ## 테스트 실행
 - 기본 검증(로컬 ES 없이 가능): `./gradlew test`
 - 통합 검증(Elasticsearch 필요): `./gradlew integrationTest`
+- 특정 통합 테스트 클래스 실행: `./gradlew integrationTest --tests com.example.aisearch.IndexRestoreIntegrationTest`
+- 특정 통합 테스트 메서드 실행: `./gradlew integrationTest --tests com.example.aisearch.IndexRestoreIntegrationTest.restoreApi는_직전_인덱스로_롤백해_검색결과를_복구한다`
 
 통합 테스트는 로컬 Elasticsearch, truststore, 샘플 색인 환경이 준비된 상태를 전제로 합니다.
+`IndexRestoreIntegrationTest`, `SearchIntegrationTest` 같은 통합 테스트는 `:test`가 아니라 `:integrationTest`로 실행해야 합니다.
 
 ## 모델별 실행 프로필
 - `model-e5-small-ko-v2`: `./gradlew bootRun --args='--spring.profiles.active=model-e5-small-ko-v2'`

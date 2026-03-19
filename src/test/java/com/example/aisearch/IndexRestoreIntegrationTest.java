@@ -2,9 +2,11 @@ package com.example.aisearch;
 
 import com.example.aisearch.service.indexing.orchestration.IndexRolloutService;
 import com.example.aisearch.service.indexing.orchestration.result.IndexRolloutResult;
+import com.example.aisearch.support.RequiresElasticsearch;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -29,6 +31,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
                 "ai-search.index-retention-count=3"
         }
 )
+@RequiresElasticsearch
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class IndexRestoreIntegrationTest extends RestApiIntegrationTestBase {
 
@@ -50,6 +53,7 @@ class IndexRestoreIntegrationTest extends RestApiIntegrationTestBase {
     }
 
     @Test
+    @DisplayName("복구 API는 직전 정상 인덱스로 롤백해 검색 결과를 복구한다")
     void restoreApi는_직전_인덱스로_롤백해_검색결과를_복구한다() throws Exception {
         System.out.println("[STEP-1] baseline rollout 시작");
         IndexRolloutResult baseline = indexRolloutService.rollOutFromSourceData();
@@ -108,6 +112,7 @@ class IndexRestoreIntegrationTest extends RestApiIntegrationTestBase {
     }
 
     @Test
+    @DisplayName("복구 후보 조회 API는 복구 가능한 인덱스 목록을 최신순으로 반환한다")
     void candidatesApi는_복구가능한_인덱스목록을_최신순으로_반환한다() throws Exception {
         IndexRolloutResult baseline = indexRolloutService.rollOutFromSourceData();
         Thread.sleep(1100L);
@@ -134,6 +139,7 @@ class IndexRestoreIntegrationTest extends RestApiIntegrationTestBase {
     }
 
     @Test
+    @DisplayName("복구 API는 현재 인덱스를 대상으로 요청하면 400을 반환한다")
     void restoreApi는_현재인덱스를_target으로_주면_400을_반환한다() throws Exception {
         IndexRolloutResult current = indexRolloutService.rollOutFromSourceData();
 
@@ -146,6 +152,7 @@ class IndexRestoreIntegrationTest extends RestApiIntegrationTestBase {
     }
 
     @Test
+    @DisplayName("복구 API는 존재하지 않는 인덱스를 대상으로 요청하면 404를 반환한다")
     void restoreApi는_존재하지않는_인덱스면_404를_반환한다() throws Exception {
         indexRolloutService.rollOutFromSourceData();
         String missingIndex = properties.indexName() + "-v20991231235959";

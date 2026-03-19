@@ -1,6 +1,0 @@
-server:
-  port: ${SERVER_PORT:8094}
-
-ai-search:
-  model-key: e5-small-ko
-  model-path-segment: multilingual-e5-small-ko

@@ -21,6 +21,7 @@ import org.springframework.stereotype.Service;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * 텍스트를 숫자 벡터(임베딩)로 바꿔주는 서비스입니다.
@@ -96,6 +97,7 @@ public class DjlEmbeddingService implements EmbeddingService {
         // 모델이 생성하는 벡터 차원을 확인하기 위해 샘플 문장 1회 추론한다.
         // 차원 수는 Elasticsearch dense_vector 매핑과 반드시 일치해야 한다.
         float[] probe = predictRaw("한글 식품 벡터 검색 테스트");
+        assertNonZeroVector(probe, "한글 식품 벡터 검색 테스트");
         dimensions = probe.length;
 
         log.info("Embedding model initialized. dimensions={}", dimensions);
@@ -107,6 +109,7 @@ public class DjlEmbeddingService implements EmbeddingService {
         // 2) L2 정규화로 벡터 길이를 1로 맞춘다.
         //    코사인 유사도 계산 시 더 안정적이고 일관된 결과를 얻을 수 있다.
         float[] raw = predictRaw(text);
+        assertNonZeroVector(raw, text);
         float[] normalized = l2Normalize(raw);
 
         List<Float> values = new ArrayList<>(normalized.length);
@@ -151,6 +154,36 @@ public class DjlEmbeddingService implements EmbeddingService {
             normalized[i] = (float) (vector[i] / norm);
         }
         return normalized;
+    }
+
+    private void assertNonZeroVector(float[] vector, String text) {
+        if (vector == null || vector.length == 0) {
+            throw new IllegalStateException("임베딩 모델이 비어 있는 벡터를 반환했습니다. text=" + summarizeText(text));
+        }
+
+        double sum = 0.0;
+        for (float value : vector) {
+            sum += value * value;
+        }
+
+        if (sum == 0.0d) {
+            throw new IllegalStateException(
+                    "임베딩 모델이 zero vector를 반환했습니다. cosine 유사도 인덱싱을 계속할 수 없습니다. text="
+                            + summarizeText(text)
+            );
+        }
+    }
+
+    private String summarizeText(String text) {
+        if (text == null) {
+            return "<null>";
+        }
+
+        String normalized = text.replaceAll("\\s+", " ").trim();
+        if (normalized.length() <= 80) {
+            return normalized;
+        }
+        return normalized.substring(0, 80) + "...";
     }
 
     @PreDestroy

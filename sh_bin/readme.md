@@ -60,6 +60,12 @@
 ./sh_bin/04_run_vector_search_test_local.sh
 ```
 
+개별 통합 테스트를 직접 돌릴 때는 `test` 대신 `integrationTest`를 사용합니다.
+```bash
+./gradlew integrationTest --tests com.example.aisearch.IndexRestoreIntegrationTest
+./gradlew integrationTest --tests com.example.aisearch.IndexRestoreIntegrationTest.restoreApi는_직전_인덱스로_롤백해_검색결과를_복구한다
+```
+
 ### 5) 모델별 앱 실행
 ```bash
 ./sh_bin/21_run_model_web.sh e5-small-ko-v2
@@ -72,6 +78,11 @@
 - `e5-small-ko-v2`
 - `kure-v1`
 - `bge-m3`
+
+대응 Hugging Face 모델:
+- `dragonkue/multilingual-e5-small-ko-v2`
+- `nlpai-lab/KURE-v1`
+- `BAAI/bge-m3`
 
 전체 모델을 한 번에 실행할 수도 있습니다.
 ```bash

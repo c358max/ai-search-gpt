@@ -57,12 +57,20 @@ public class ProductIndexingService {
 
         for (int index = 0; index < foods.size(); index++) {
             FoodProduct food = foods.get(index);
-            batch.add(documentMapper.toIndexDocument(
-                    food,
-                    embeddingService.toEmbeddingVector(
-                            embeddingInputFormatter.formatDocument(food.toEmbeddingText())
-                    )
-            ));
+            String embeddingText = embeddingInputFormatter.formatDocument(food.toEmbeddingText());
+            try {
+                batch.add(documentMapper.toIndexDocument(
+                        food,
+                        embeddingService.toEmbeddingVector(embeddingText)
+                ));
+            } catch (RuntimeException e) {
+                throw new IllegalStateException(
+                        "상품 임베딩 생성 실패. id=" + food.getId()
+                                + ", goodsName=" + safeValue(food.getGoodsName())
+                                + ", modelInput=" + summarizeText(embeddingText),
+                        e
+                );
+            }
 
             if (batch.size() == BULK_BATCH_SIZE || index == foods.size() - 1) {
                 indexedCount += bulkIndexingExecutor.bulkIndex(indexName, batch);
@@ -72,5 +80,20 @@ public class ProductIndexingService {
         }
 
         return indexedCount;
+    }
+
+    private String summarizeText(String text) {
+        if (text == null) {
+            return "<null>";
+        }
+        String normalized = text.replaceAll("\\s+", " ").trim();
+        if (normalized.length() <= 120) {
+            return normalized;
+        }
+        return normalized.substring(0, 120) + "...";
+    }
+
+    private String safeValue(String value) {
+        return value == null || value.isBlank() ? "<blank>" : value;
     }
 }

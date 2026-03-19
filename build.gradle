@@ -28,6 +28,7 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter'
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
+    implementation 'org.springframework.boot:spring-boot-starter-jdbc'
     implementation 'org.springframework.data:spring-data-commons'
 
     implementation "co.elastic.clients:elasticsearch-java:${elasticsearchJavaVersion}"
@@ -37,6 +38,7 @@ dependencies {
     implementation "ai.djl.huggingface:tokenizers:${djlVersion}"
     implementation "ai.djl.pytorch:pytorch-engine:${djlVersion}"
     runtimeOnly "ai.djl.pytorch:pytorch-native-cpu:${pytorchVersion}"
+    runtimeOnly 'com.h2database:h2'
     implementation 'com.github.ben-manes.caffeine:caffeine'
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'

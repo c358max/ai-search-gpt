@@ -4,9 +4,13 @@ import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import com.example.aisearch.config.AiSearchProperties;
 import com.example.aisearch.service.indexing.domain.exception.AliasLookupException;
 import com.example.aisearch.service.indexing.domain.exception.AliasSwapException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -18,6 +22,8 @@ import java.util.Map;
  */
 @Service
 public class AliasSwitcher {
+
+    private static final Logger log = LoggerFactory.getLogger(AliasSwitcher.class);
 
     private final ElasticsearchClient esClient;
     private final AiSearchProperties properties;
@@ -41,12 +47,7 @@ public class AliasSwitcher {
                 return null;
             }
 
-            Map<String, ?> aliasMap = esClient.indices().getAlias(g -> g.name(alias)).result();
-            if (aliasMap.size() > 1) {
-                throw new AliasLookupException("하나의 read alias가 여러 인덱스를 가리킵니다. alias="
-                        + alias + ", indices=" + aliasMap.keySet());
-            }
-            return aliasMap.keySet().stream().findFirst().orElse(null);
+            return selectCurrentAliasedIndex(alias, loadAliasTargets(alias));
         } catch (IOException e) {
             throw new AliasLookupException("alias 조회 실패. alias=" + alias, e);
         }
@@ -66,13 +67,22 @@ public class AliasSwitcher {
         String alias = resolveReadAlias();
         try {
             boolean aliasNameAsIndexExists = esClient.indices().exists(e -> e.index(alias)).value();
+            List<String> currentAliasTargets = loadAliasTargets(alias);
             esClient.indices().updateAliases(u -> {
                 // 마이그레이션 단계: alias 이름과 동일한 물리 인덱스가 있으면 먼저 제거해야 alias를 생성할 수 있다.
                 if (aliasNameAsIndexExists && (oldIndex == null || oldIndex.isBlank())) {
                     u.actions(a -> a.removeIndex(r -> r.index(alias)));
                 }
 
-                if (oldIndex != null && !oldIndex.isBlank() && !oldIndex.equals(newIndex)) {
+                for (String currentAliasTarget : currentAliasTargets) {
+                    if (!currentAliasTarget.equals(newIndex)) {
+                        u.actions(a -> a.remove(r -> r.alias(alias).index(currentAliasTarget)));
+                    }
+                }
+                if ((currentAliasTargets.isEmpty())
+                        && oldIndex != null
+                        && !oldIndex.isBlank()
+                        && !oldIndex.equals(newIndex)) {
                     u.actions(a -> a.remove(r -> r.alias(alias).index(oldIndex)));
                 }
                 u.actions(a -> a.add(ad -> ad.alias(alias).index(newIndex)));
@@ -90,5 +100,28 @@ public class AliasSwitcher {
             throw new IllegalStateException("ai-search.read-alias 값이 비어 있습니다.");
         }
         return readAlias;
+    }
+
+    private List<String> loadAliasTargets(String alias) throws IOException {
+        Map<String, ?> aliasMap = esClient.indices().getAlias(g -> g.name(alias)).result();
+        return aliasMap.keySet().stream()
+                .sorted(Comparator.naturalOrder())
+                .toList();
+    }
+
+    private String selectCurrentAliasedIndex(String alias, List<String> aliasTargets) {
+        if (aliasTargets.isEmpty()) {
+            return null;
+        }
+        if (aliasTargets.size() == 1) {
+            return aliasTargets.getFirst();
+        }
+
+        String selected = aliasTargets.stream()
+                .max(Comparator.naturalOrder())
+                .orElse(aliasTargets.getFirst());
+        log.warn("read alias가 여러 인덱스를 가리키고 있어 최신 인덱스를 선택합니다. alias={}, selected={}, indices={}",
+                alias, selected, aliasTargets);
+        return selected;
     }
 }

@@ -6,6 +6,14 @@ ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 TRUSTSTORE_PATH="${TRUSTSTORE_PATH:-${HOME}/.ai-cert/djl-truststore.p12}"
 TRUSTSTORE_PASSWORD="${AI_SEARCH_TRUSTSTORE_PASSWORD:-changeit}"
 
+# 로컬 실행 기본값:
+# - 별도 지정이 없으면 로컬 Docker Elasticsearch(9210)를 사용한다.
+# - k8s port-forward 자동 연결은 로컬 수동 검증에선 혼선을 만들 수 있어 기본 비활성화한다.
+AI_SEARCH_ES_URL="${AI_SEARCH_ES_URL:-http://127.0.0.1:9210}"
+AI_SEARCH_ES_USERNAME="${AI_SEARCH_ES_USERNAME:-elastic}"
+AI_SEARCH_ES_PASSWORD="${AI_SEARCH_ES_PASSWORD:-elastic}"
+AI_SEARCH_AUTO_PORT_FORWARD="${AI_SEARCH_AUTO_PORT_FORWARD:-false}"
+
 java_major_version() {
   "$1" -version 2>&1 | sed -n 's/.*version "\(1\.\)\{0,1\}\([0-9][0-9]*\).*/\2/p' | head -n 1
 }
@@ -71,7 +79,7 @@ case "${MODE}" in
     ;;
   *)
     echo "[ERROR] unsupported mode: ${MODE}"
-    echo "[USAGE] ./sh_bin/20_run_model_profile.sh <web|indexing|indexing-web> <e5-small-ko-v2|e5-small-ko|kure-v1|koe5|bge-m3>"
+    echo "[USAGE] ./sh_bin/20_run_model_profile.sh <web|indexing|indexing-web> <e5-small-ko-v2|kure-v1|bge-m3>"
     exit 1
     ;;
 esac
@@ -81,17 +89,9 @@ case "${MODEL_KEY}" in
     PROFILE="model-e5-small-ko-v2"
     DEFAULT_PORT=8091
     ;;
-  e5-small-ko)
-    PROFILE="model-e5-small-ko"
-    DEFAULT_PORT=8094
-    ;;
   kure-v1)
     PROFILE="model-kure-v1"
     DEFAULT_PORT=8092
-    ;;
-  koe5)
-    PROFILE="model-koe5"
-    DEFAULT_PORT=8095
     ;;
   bge-m3)
     PROFILE="model-bge-m3"
@@ -99,7 +99,7 @@ case "${MODEL_KEY}" in
     ;;
   *)
     echo "[ERROR] unsupported model key: ${MODEL_KEY}"
-    echo "[USAGE] ./sh_bin/20_run_model_profile.sh <web|indexing|indexing-web> <e5-small-ko-v2|e5-small-ko|kure-v1|koe5|bge-m3>"
+    echo "[USAGE] ./sh_bin/20_run_model_profile.sh <web|indexing|indexing-web> <e5-small-ko-v2|kure-v1|bge-m3>"
     exit 1
     ;;
 esac
@@ -127,15 +127,29 @@ echo "[INFO] mode=${MODE}"
 echo "[INFO] model=${MODEL_KEY}"
 echo "[INFO] spring.profiles.active=${ACTIVE_PROFILES}"
 echo "[INFO] server.port=${SERVER_PORT}"
+echo "[INFO] ai-search.elasticsearch-url=${AI_SEARCH_ES_URL}"
+echo "[INFO] ai-search.username=${AI_SEARCH_ES_USERNAME}"
+echo "[INFO] ai-search.k8s.auto-port-forward=${AI_SEARCH_AUTO_PORT_FORWARD}"
 
 cd "${ROOT_DIR}"
 
 if [ "${MODE}" = "web" ]; then
+  # 웹 전용 실행은 truststore 없이도 동작할 수 있으므로
+  # ES 주소와 포트포워드 여부만 명시적으로 고정해 전달한다.
+  AI_SEARCH_ES_URL="${AI_SEARCH_ES_URL}" \
+  AI_SEARCH_ES_USERNAME="${AI_SEARCH_ES_USERNAME}" \
+  AI_SEARCH_ES_PASSWORD="${AI_SEARCH_ES_PASSWORD}" \
+  AI_SEARCH_AUTO_PORT_FORWARD="${AI_SEARCH_AUTO_PORT_FORWARD}" \
   SERVER_PORT="${SERVER_PORT}" \
   ./gradlew bootRun --args="--spring.profiles.active=${ACTIVE_PROFILES}"
   exit 0
 fi
 
+# 색인 계열 실행은 truststore와 함께 동일한 ES 연결값을 전달한다.
 JAVA_TOOL_OPTIONS="-Djavax.net.ssl.trustStore=${TRUSTSTORE_PATH} -Djavax.net.ssl.trustStorePassword=${TRUSTSTORE_PASSWORD}" \
+AI_SEARCH_ES_URL="${AI_SEARCH_ES_URL}" \
+AI_SEARCH_ES_USERNAME="${AI_SEARCH_ES_USERNAME}" \
+AI_SEARCH_ES_PASSWORD="${AI_SEARCH_ES_PASSWORD}" \
+AI_SEARCH_AUTO_PORT_FORWARD="${AI_SEARCH_AUTO_PORT_FORWARD}" \
 SERVER_PORT="${SERVER_PORT}" \
 ./gradlew bootRun --args="--spring.profiles.active=${ACTIVE_PROFILES}"

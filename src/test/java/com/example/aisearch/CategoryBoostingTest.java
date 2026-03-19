@@ -5,12 +5,14 @@ import com.example.aisearch.model.search.ProductSearchRequest;
 import com.example.aisearch.model.search.SearchSortOption;
 import com.example.aisearch.service.indexing.orchestration.IndexRolloutService;
 import com.example.aisearch.service.search.categoryboost.policy.CategoryBoostBetaTuner;
+import com.example.aisearch.service.search.categoryboost.api.CategoryBoostRules;
 import com.example.aisearch.service.search.ProductSearchService;
 import com.example.aisearch.support.RequiresElasticsearch;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,11 +20,13 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.domain.Pageable;
 
 import java.util.List;
+import java.util.Set;
 @SpringBootTest(properties = {
         "ai-search.index-name=categoryboost-it-products",
         "ai-search.read-alias=categoryboost-it-products-read",
         "ai-search.synonyms-set=categoryboost-it-synonyms"
 })
+@RequiresElasticsearch
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class CategoryBoostingTest extends ElasticsearchIntegrationTestBase {
 
@@ -35,6 +39,9 @@ class CategoryBoostingTest extends ElasticsearchIntegrationTestBase {
     @Autowired
     private CategoryBoostBetaTuner categoryBoostBetaTuner;
 
+    @Autowired
+    private CategoryBoostRules categoryBoostRules;
+
     @BeforeAll
     void setUp() throws Exception {
         printIsolationConfig("CategoryBoostingTest");
@@ -44,19 +51,26 @@ class CategoryBoostingTest extends ElasticsearchIntegrationTestBase {
     }
 
     @Test
+    @DisplayName("'사과' 검색 시 상위 결과에 부스팅 대상 카테고리 문서가 충분히 노출된다")
     void categoryBoostingSortShouldBoostFruitCategoryForAppleKeyword() {
         ProductSearchRequest request = new ProductSearchRequest("사과", null, null, SearchSortOption.CATEGORY_BOOSTING_DESC);
         List<SearchHitResult> results = productSearchService.searchPage(request, pageRequest(1, 5)).results();
 
         Assertions.assertFalse(results.isEmpty(), "카테고리 부스팅 검증을 위한 결과가 필요합니다.");
-        long fruitCount = countCategoryInTopN(results, 5, 4);
+        Set<Integer> boostedCategoryIds = categoryBoostRules.findByKeyword("사과")
+                .orElseThrow(() -> new AssertionError("'사과' 카테고리 부스팅 룰이 필요합니다."))
+                .keySet().stream()
+                .map(Integer::valueOf)
+                .collect(java.util.stream.Collectors.toSet());
+        long fruitCount = countCategoryInTopN(results, 5, boostedCategoryIds);
         int topN = Math.min(5, results.size());
         long expectedMin = Math.min(2, topN);
         Assertions.assertTrue(fruitCount >= expectedMin,
-                "상위 " + topN + "개 중 categoryId=4(과일) 문서가 최소 " + expectedMin + "개 이상이어야 합니다. actual=" + fruitCount);
+                "상위 " + topN + "개 중 '사과' 부스팅 카테고리 문서가 최소 " + expectedMin + "개 이상이어야 합니다. actual=" + fruitCount);
     }
 
     @Test
+    @DisplayName("'사과잼'처럼 룰이 일치하지 않으면 카테고리 부스팅 정렬은 연관도순으로 동작한다")
     void categoryBoostingSortShouldFallbackToRelevanceWhenAppleJamKeywordDoesNotMatch() {
         Pageable pageable = pageRequest(1, 10);
         ProductSearchRequest categoryBoostSortRequest = new ProductSearchRequest("사과잼", null, null, SearchSortOption.CATEGORY_BOOSTING_DESC);
@@ -70,10 +84,11 @@ class CategoryBoostingTest extends ElasticsearchIntegrationTestBase {
     }
 
     @Test
+    @DisplayName("검색어가 비어 있으면 카테고리 부스팅 정렬은 연관도순으로 동작한다")
     void categoryBoostingSortShouldFallbackToRelevanceWhenQueryIsBlank() {
         Pageable pageable = pageRequest(1, 10);
-        ProductSearchRequest categoryBoostSortRequest = new ProductSearchRequest("   ", null, List.of(1, 2, 7), SearchSortOption.CATEGORY_BOOSTING_DESC);
-        ProductSearchRequest relevanceSortRequest = new ProductSearchRequest("   ", null, List.of(1, 2, 7), SearchSortOption.RELEVANCE_DESC);
+        ProductSearchRequest categoryBoostSortRequest = new ProductSearchRequest("   ", null, List.of(5675, 5711, 5721), SearchSortOption.CATEGORY_BOOSTING_DESC);
+        ProductSearchRequest relevanceSortRequest = new ProductSearchRequest("   ", null, List.of(5675, 5711, 5721), SearchSortOption.RELEVANCE_DESC);
 
         List<SearchHitResult> boostedResults = productSearchService.searchPage(categoryBoostSortRequest, pageable).results();
         List<SearchHitResult> relevanceResults = productSearchService.searchPage(relevanceSortRequest, pageable).results();
@@ -83,6 +98,7 @@ class CategoryBoostingTest extends ElasticsearchIntegrationTestBase {
     }
 
     @Test
+    @DisplayName("베타가 0이면 카테고리 부스팅 정렬 결과는 연관도순과 같아야 한다")
     void categoryBoostingShouldHaveNoEffectWhenBetaIsZero() {
         categoryBoostBetaTuner.setBeta(0.0);
 
@@ -107,11 +123,11 @@ class CategoryBoostingTest extends ElasticsearchIntegrationTestBase {
         deleteAllVersionedIndices();
     }
 
-    private long countCategoryInTopN(List<SearchHitResult> results, int topN, int expectedCategoryId) {
+    private long countCategoryInTopN(List<SearchHitResult> results, int topN, Set<Integer> expectedCategoryIds) {
         return results.stream()
                 .limit(topN)
-                .map(hit -> SearchResultTestSupport.asInteger(hit.source(), "lev3_category_id"))
-                .filter(categoryId -> categoryId != null && categoryId == expectedCategoryId)
+                .map(hit -> SearchResultTestSupport.asCategoryInteger(hit.source()))
+                .filter(categoryId -> categoryId != null && expectedCategoryIds.contains(categoryId))
                 .count();
     }
 
